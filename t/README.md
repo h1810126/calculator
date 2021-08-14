@@ -19,4 +19,4 @@
 - Line 3326: the end
 
 ### How to use this code
-Open "TI-Nspire CX (CAS) Student Software" -> Insert -> Script Editor -> Insert Script -> _paste code here_
+Open "TI-Nspire CX (CAS) Student Software" -> Insert -> Script Editor -> Insert Script -> type a name -> _paste code here_
