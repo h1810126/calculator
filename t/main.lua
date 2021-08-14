@@ -466,7 +466,6 @@ local queue_lib = make_deque()
 
 local image_names = {
     -- "name",
-    "settings",
 }
 
 local images = {}
