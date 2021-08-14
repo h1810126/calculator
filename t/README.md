@@ -17,3 +17,6 @@
 - Line 3019: settings screen
 - Line 3299: (incomplete)
 - Line 3326: the end
+
+### How to use this code
+Open "TI-Nspire CX (CAS) Student Software" -> Insert -> Script Editor -> Insert Script -> <paste code here>
