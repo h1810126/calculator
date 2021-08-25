@@ -1518,7 +1518,10 @@ local block_storage = { -- BLOCKS
     -- the 7 tetrominoes
     normal = {
         mode = "normal",
+        length = 7,
         offset = {0, 0, 0, 0, 0, 0, 1},
+        multiplier = {1, 1, 1, 1, 1, 1, 1},
+        letters = {"I", "L", "J", "Z", "S", "T", "O"},
         mirror = false,
         rep = 6,
         [1] = 
@@ -1554,7 +1557,10 @@ local block_storage = { -- BLOCKS
     },
     funny = {
         mode = "funny",
+        length = 8,
         offset = {1, 0, 0, 0, 0, 0, 1, 4},
+        multiplier = {1, 1, 1, 1, 1, 1, 1, 1},
+        letters = {"I", "L", "J", "Z", "S", ".", "O", "_"},
         mirror = false,
         rep = 7,
         [1] = 
@@ -1601,7 +1607,10 @@ local block_storage = { -- BLOCKS
     },
     penta = {
         mode = "penta",
+        length = 12,
         offset = {1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0},
+        multiplier = {1, 2, 2, 2, 2, 1, 1, 2, 1, 1, 2, 1},
+        letters = {"I", "L", "P", "Z", "F", "T", "U", "N", "V", "W", "Y", "X"},
         mirror = true,
         rep = 8,
         [1] = 
@@ -1662,6 +1671,7 @@ local block_storage = { -- BLOCKS
 
 local blocks = block_storage["normal"]
 
+-- unused?
 local block_letter = {
     [1] = "I",
     [2] = "L",
@@ -1733,6 +1743,17 @@ local lines_score = {
     [9] = 10000,
     [10] = 15000,
     [11] = 20000,
+    ["?0"] = 400,
+    ["?1"] = 800,
+    ["?2"] = 1200,
+    ["?3"] = 1600,
+    ["?4"] = 2000,
+    ["?5"] = 3000,
+    ["?6"] = 4000,
+    ["?7"] = 5000,
+    ["?8"] = 6500,
+    ["?9"] = 8000,
+    ["?10"] = 10000,
     ["T0"] = 400,
     ["T1"] = 800,
     ["T2"] = 1200,
@@ -1782,6 +1803,17 @@ local lines_string = {
     [8] = "x8",
     [9] = "x9",
     [10] = "x10",
+    ["?0"] = "spin",
+    ["?1"] = "spin x1",
+    ["?2"] = "spin x2",
+    ["?3"] = "spin x3",
+    ["?4"] = "spin x4",
+    ["?5"] = "spin x5!",
+    ["?6"] = "spin x6!",
+    ["?7"] = "spin x7!",
+    ["?8"] = "spin x8!",
+    ["?9"] = "spin x9!",
+    ["?10"] = "spin x10!",
     ["T0"] = "t-spin",
     ["T1"] = "t-spin x1",
     ["T2"] = "t-spin x2",
@@ -1806,13 +1838,14 @@ local lines_string = {
     ["I1"] = "I-spin x1",
     ["I2"] = "I-spin x2",
     ["I3"] = "I-spin x3",
-    ["I4"] = "tetris-spin",
-    ["I5"] = "I-spin x5",
+    ["I4"] = "tetris-spin!",
+    ["I5"] = "I-spin x5!",
     ["O0"] = ":O-spin",
     ["O1"] = ":O-spin x1",
     ["O2"] = ":O-spin x2",
     ["O3"] = "impossible!",
-    ["PC1"] = "all clear", -- all clear
+    ["O4"] = ":O spin x4",
+    ["PC1"] = "all clear",
     ["PC2"] = "all clear",
     ["PC3"] = "all clear",
     ["PC4"] = "all clear",
@@ -2468,7 +2501,7 @@ end
 -- @menu
 
 menu.options = {
-    "Practice", "Lines", "Timed", "Clear", "Level", "Send", "Funny"
+    "Practice", "Lines", "Timed", "Clear", "Level", "Send", "Penta", "Funny"
 }
 
 function menu.start()
@@ -2545,6 +2578,8 @@ function menu.charIn(char)
             play.start("send", 0)
         elseif s == 7 then
             play.start("funny", "penta")
+        elseif s == 8 then
+            play.start("funny", "funny")
         end
     elseif char == "esc" then
         main_menu.start()
@@ -2802,8 +2837,23 @@ end
 
 function play.add_pieces()
     local shuffle_table = { }
-    for i = 1, #blocks do
-        shuffle_table[i] = i
+    if blocks.multiplier == nil then
+        for i = 1, blocks.length do
+            shuffle_table[i] = i
+        end
+    else
+        local index = 1
+        local number = 1
+        local countdown = blocks.multiplier[number] or 1
+        while number <= blocks.length do
+            shuffle_table[index] = number
+            countdown = countdown - 1
+            if countdown <= 0 then
+                number = number + 1
+                countdown = blocks.multiplier[number] or 1
+            end
+            index = index + 1
+        end
     end
     local shuffled = random.shuffle(shuffle_table)
     for i, v in ipairs(shuffled) do
@@ -2838,7 +2888,7 @@ function play.paint(gc)
         mix_value = 0.5
     end
     if play.saved_piece > 0 then
-        t.paint_piece(gc, play.saved_piece, 0, ox + sx - 40, oy + sy + 50, mix_value)
+        t.paint_piece(gc, play.saved_piece, 0, ox + sx - 40, oy + sy + 50 - 10 * blocks.offset[play.saved_piece], mix_value)
     end
 
     -- lines
@@ -3013,16 +3063,24 @@ function play.add_piece()
     
     -- other spins!
     if play.spin > 0 then
-        play.disp_lines = block_letter[play.spin] .. count
+        play.disp_lines = blocks.letters[play.spin] .. count
         -- do I give score?
         play.disp_lines_score = lines_score[play.disp_lines]
+        if play.disp_lines_score == nil then
+            play.disp_lines = "?" .. count
+            play.disp_lines_score = lines_score[play.disp_lines]
+        end
     end
     
     -- time, combo
     if play.disp_lines ~= 0 then
         play.combo = play.combo + 1
         play.disp_lines_time = play.time
-        play.disp_lines_score = play.disp_lines_score + 50 * play.combo
+        if play.disp_lines_score == nil then
+            play.disp_lines_score = 0
+        else
+            play.disp_lines_score = play.disp_lines_score + 50 * play.combo
+        end
     else
         play.combo = -1
     end
@@ -3120,7 +3178,7 @@ function play.rotate(dr, mirror)
         if mirror then
             new_rot = p.rot - 4
         else
-            new_rot = new_rot + 4
+            new_rot = (p.rot - dr + 4) % 4 + 4
         end
     else
         if mirror then
