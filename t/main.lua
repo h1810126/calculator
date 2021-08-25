@@ -189,6 +189,22 @@ local function deep_copy(orig)
     return copy
 end
 
+function better_deep_copy(obj, seen)
+    if type(obj) ~= 'table' then
+        return obj 
+    end
+    if seen and seen[obj] then
+        return seen[obj] 
+    end
+    local s = seen or {}
+    local res = setmetatable({}, getmetatable(obj))
+    s[obj] = res
+    for k, v in pairs(obj) do 
+        res[better_deep_copy(k, s)] = better_deep_copy(v, s) 
+    end
+    return res
+end
+
 local function fast_copy(o)
     -- not a table
     if type(o) ~= 'table' then
@@ -1502,12 +1518,15 @@ local block_storage = { -- BLOCKS
     -- the 7 tetrominoes
     normal = {
         mode = "normal",
+        offset = {0, 0, 0, 0, 0, 0, 1},
+        mirror = false,
+        rep = 6,
         [1] = 
         { 0, 0, 0, 0,
           1, 1, 1, 1,
           0, 0, 0, 0,
           0, 0, 0, 0 }, -- I
-        [2] =  
+        [2] = 
         { 0, 0, 1,
           1, 1, 1,
           0, 0, 0 },    -- L
@@ -1535,12 +1554,15 @@ local block_storage = { -- BLOCKS
     },
     funny = {
         mode = "funny",
+        offset = {1, 0, 0, 0, 0, 0, 1, 4},
+        mirror = false,
+        rep = 7,
         [1] = 
         { 0, 0, 0, 0,
           1, 1, 1, 1,
           1, 0, 0, 0,
           0, 0, 0, 0 }, -- I
-        [2] =  
+        [2] = 
         { 0, 0, 0,
           1, 1, 1,
           0, 0, 0 },    -- L
@@ -1557,14 +1579,84 @@ local block_storage = { -- BLOCKS
           1, 1, 0,
           0, 1, 0 },    -- S
         [6] =  
-        { 0, 0, 0,
-          0, 1, 0,
+        { 0, 1, 0,
+          0, 0, 0,
           0, 0, 0, },   -- T
         [7] =  
         { 0, 0, 0, 0,
           0, 1, 1, 0,
           0, 1, 1, 0,
           1, 0, 0, 0 }, -- O
+        [8] =  
+        { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, -- !!!!!!!!!!
+    },
+    penta = {
+        mode = "penta",
+        offset = {1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0},
+        mirror = true,
+        rep = 8,
+        [1] = 
+        { 0, 0, 0, 0, 0,
+          0, 0, 0, 0, 0,
+          1, 1, 1, 1, 1,
+          0, 0, 0, 0, 0,
+          0, 0, 0, 0, 0 }, -- I (I)
+        [2] = 
+        { 0, 0, 0, 0,
+          1, 1, 1, 1,
+          1, 0, 0, 0,
+          0, 0, 0, 0 },    -- L (L)
+        [3] =        
+        { 0, 0, 0,
+          1, 1, 1,
+          0, 1, 1 },    -- P (J)
+        [4] =  
+        { 1, 1, 0,
+          0, 1, 0,
+          0, 1, 1 },    -- Z (Z)
+        [5] =       
+        { 0, 1, 1,
+          1, 1, 0,
+          0, 1, 0 },    -- F (S)
+        [6] =  
+        { 1, 1, 1,
+          0, 1, 0,
+          0, 1, 0, },   -- T (T)
+        [7] =  
+        { 0, 0, 0,
+          1, 0, 1,
+          1, 1, 1 }, -- U (O)
+        [8] = 
+          { 0, 0, 0, 0,
+            1, 1, 0, 0,
+            0, 1, 1, 1,
+            0, 0, 0, 0 }, -- N
+        [9] = 
+          { 1, 0, 0,
+            1, 0, 0,
+            1, 1, 1 }, -- V
+        [10] = 
+          { 1, 0, 0,
+            1, 1, 0,
+            0, 1, 1 }, -- W
+        [11] = 
+          { 0, 0, 0, 0,
+            0, 0, 1, 0,
+            1, 1, 1, 1,
+            0, 0, 0, 0 }, -- Y
+        [12] =  
+          { 0, 1, 0,
+            1, 1, 1,
+            0, 1, 0 }, -- X
     },
 }
 
@@ -1578,35 +1670,69 @@ local block_letter = {
     [5] = "S",
     [6] = "T",
     [7] = "O",
+    [8] = "8",
+    [9] = "9",
+    [10] = "10",
+    [11] = "11",
+    [12] = "12",
+    [13] = "13",
+    [14] = "14",
+    [15] = "15",
+    [16] = "16",
+    [17] = "17",
+    [18] = "18",
+    [19] = "19",
+    [20] = "20",
+    [21] = "21",
 }
 
-local blocks_rotated_initial = {
-    {}, {}, {}, {}, {}, {}, {}
-}
+local function new_blocks_rotated()
+    local temp = { }
+    for i = 1, 20 do
+        temp[i] = {}
+    end
+    return temp
+end
 
-local blocks_rotated = {
-    {}, {}, {}, {}, {}, {}, {}
+local blocks_rotated = new_blocks_rotated()
+
+local blocks_x_check = {
+    4, 5, 3, 6, 2, 7, 1, 8, 0, 9,
 }
 
 local block_colors = {
-    [0] = {25, 25, 25},    -- B black
-    [1] = {101, 233, 184}, -- I blue
-    [2] = {233, 150, 101}, -- L orange
-    [3] = {95, 77, 176},   -- J purple
-    [4] = {218, 88, 95},   -- Z red
-    [5] = {176, 223, 96},  -- S green
-    [6] = {193, 92, 183},  -- T pink
-    [7] = {216, 190, 88},  -- O yellow
-    [8] = {161, 161, 161}, -- ? grey
+    [-1] = {161, 161, 161}, -- ? grey
+    [0]  = {25, 25, 25},    -- B black
+    [1]  = {101, 233, 184}, -- I cyan
+    [2]  = {233, 150, 101}, -- L orange
+    [3]  = {95, 77, 176},   -- J purple
+    [4]  = {218, 88, 95},   -- Z red
+    [5]  = {176, 223, 96},  -- S green
+    [6]  = {193, 92, 183},  -- T pink
+    [7]  = {216, 190, 88},  -- O yellow
+    [8]  = {150, 105, 86},  -- #8 brown
+    [9]  = {255, 51, 0},    -- #9 orange red
+    [10] = {99, 199, 90},   -- #10 leaf colour
+    [11] = {14, 117, 37},   -- #11 dark green
+    [12] = {9, 158, 217},   -- #12 blue
+    [13] = {201, 34, 106},  -- #13 pink red
+    [14] = {63, 82, 23},    -- #14 olive?
+    [15] = {135, 179, 255}, -- #15 light blue
 }
 
 local lines_score = {
-    [-1] = 3500,
     [0] = 0,
     [1] = 100,
     [2] = 300,
     [3] = 500,
     [4] = 800,
+    [5] = 2000,
+    [6] = 3000,
+    [7] = 5000,
+    [8] = 7500,
+    [9] = 10000,
+    [10] = 15000,
+    [11] = 20000,
     ["T0"] = 400,
     ["T1"] = 800,
     ["T2"] = 1200,
@@ -1619,27 +1745,29 @@ local lines_score = {
     ["Z1"] = 800,
     ["Z2"] = 1200,
     ["Z3"] = 1600,
-    ["I0"] = 400,
-    ["I1"] = 800,
-    ["I2"] = 1000,
-    ["I3"] = 1400,
-    ["I4"] = 2000,
-    ["J0"] = 200,
+    ["I0"] = 450,
+    ["I1"] = 850,
+    ["I2"] = 1250,
+    ["I3"] = 1750,
+    ["I4"] = 2500,
+    ["I5"] = 3500,
+    ["J0"] = 300,
     ["J1"] = 800,
     ["J2"] = 1200,
     ["J3"] = 1600,
-    ["L0"] = 200,
+    ["L0"] = 300,
     ["L1"] = 800,
     ["L2"] = 1200,
     ["L3"] = 1600,
     ["O0"] = 500,
     ["O1"] = 1000,
     ["O2"] = 1500,
-    ["O3"] = 1000000,
+    ["O3"] = 10000,
     ["PC1"] = 3500, -- all clear
     ["PC2"] = 3000,
     ["PC3"] = 3750,
     ["PC4"] = 4000,
+    ["PC5"] = 4000,
 }
     
 local lines_string = {
@@ -1648,6 +1776,12 @@ local lines_string = {
     [2] = "x2",
     [3] = "x3",
     [4] = "x4",
+    [5] = "x5",
+    [6] = "x6",
+    [7] = "x7",
+    [8] = "x8",
+    [9] = "x9",
+    [10] = "x10",
     ["T0"] = "t-spin",
     ["T1"] = "t-spin x1",
     ["T2"] = "t-spin x2",
@@ -1673,6 +1807,7 @@ local lines_string = {
     ["I2"] = "I-spin x2",
     ["I3"] = "I-spin x3",
     ["I4"] = "tetris-spin",
+    ["I5"] = "I-spin x5",
     ["O0"] = ":O-spin",
     ["O1"] = ":O-spin x1",
     ["O2"] = ":O-spin x2",
@@ -1681,6 +1816,28 @@ local lines_string = {
     ["PC2"] = "all clear",
     ["PC3"] = "all clear",
     ["PC4"] = "all clear",
+    ["PC5"] = "all clear",
+}
+
+local lines_garbage = {
+    [2] = 1,
+    [3] = 2,
+    [4] = 4,
+    [5] = 5,
+    [6] = 6,
+    [7] = 7,
+    [8] = 8,
+    [9] = 9,
+    [10] = 10,
+    [11] = 11,
+    ["T1"] = 2,
+    ["T2"] = 4,
+    ["T3"] = 6,
+    ["PC1"] = 10, -- all clear
+    ["PC2"] = 11,
+    ["PC3"] = 12,
+    ["PC4"] = 14,
+    ["PC5"] = 15,
 }
 
 local level_lines = {
@@ -1777,6 +1934,11 @@ local srs = {
     ["1 3"] = { {0, 0}, {0, 1}, {0, -1}, {-1, 0}, {1, 0} },
     ["2 0"] = { {0, 0}, {0, -1}, {0, 1}, {1, 0}, {-1, 0} },
     ["3 1"] = { {0, 0}, {0, -1}, {0, 1}, {1, 0}, {-1, 0} },
+    -- mirrors
+    ["0 0"] = { {0, 0}, {0, -1}, {0, 1}, {1, 0}, {-1, 0} },
+    ["1 1"] = { {0, 0}, {0, -1}, {0, 1}, {1, 0}, {-1, 0} },
+    ["2 2"] = { {0, 0}, {0, -1}, {0, 1}, {1, 0}, {-1, 0} },
+    ["3 3"] = { {0, 0}, {0, -1}, {0, 1}, {1, 0}, {-1, 0} },
 }
 
 local srsi = {
@@ -1793,6 +1955,11 @@ local srsi = {
     ["1 3"] = { {0, 0}, {0, 1}, {0, -1}, {-1, 0}, {1, 0} },
     ["2 0"] = { {0, 0}, {0, -1}, {0, 1}, {1, 0}, {-1, 0} },
     ["3 1"] = { {0, 0}, {0, -1}, {0, 1}, {1, 0}, {-1, 0} },
+    -- mirrors
+    ["0 0"] = { {0, 0}, {0, -1}, {0, 1}, {1, 0}, {-1, 0} },
+    ["1 1"] = { {0, 0}, {0, -1}, {0, 1}, {1, 0}, {-1, 0} },
+    ["2 2"] = { {0, 0}, {0, -1}, {0, 1}, {1, 0}, {-1, 0} },
+    ["3 3"] = { {0, 0}, {0, -1}, {0, 1}, {1, 0}, {-1, 0} },
 }
 
 function t.reset()
@@ -1825,15 +1992,45 @@ function t.fill_board(width, height, n)
     -- ]]
 end
 
-function t.set_board_full(height, n)
+function t.set_board_full(height, same) -- what is n???
     local width = t.board.width
+    local same = same or false
+    local pos = random.randint(1, width)
     
     for y = 1, height do
         for x = 1, width do
-            t.set(x, y, 8)
+            t.set(x, y, -1)
         end
-        t.set(random.randint(1, width), y, 0)
-    end    
+        if same then
+            t.set(pos, y, 0)
+        else
+            t.set(random.randint(1, width), y, 0)
+        end
+    end
+end
+    
+function t.send_garbage(height)
+    t.print_board()
+    local width = t.board.width
+    local board_height = t.board.height_ex
+    local max_height = 0
+    
+    for y = board_height, 1, -1 do
+        for x = 1, width do
+            local got = t.get(x, y)
+            if got ~= nil then
+                if max_height < y + height then
+                    max_height = y + height
+                end
+                t.set(x, y + height, got)
+            end
+        end
+    end
+    if max_height > 20 then
+        -- fail? actually, no
+    end
+    t.set_board_full(height, true)
+    t.print_board()
 end
 
 function t.get(x, y)
@@ -1845,12 +2042,12 @@ end
 
 function t.check(x, y)
     local b = t.get(x, y)
-    return (b == nil or b > 0)
+    return (b == nil or b ~= 0)
 end
     
 function t.check_line(y)
     for x = 1, t.board.width do
-        if not (t.get(x, y) > 0) then
+        if not (t.get(x, y) ~= 0) then
             return false
         end
     end
@@ -1859,7 +2056,7 @@ end
         
 function t.check_line_empty(y)
     for x = 1, t.board.width do
-        if (t.get(x, y) > 0) then
+        if (t.get(x, y) ~= 0) then
             return false
         end
     end
@@ -1868,7 +2065,7 @@ end
             
 function t.check_clear_empty()
     for x = 1, t.board.width do
-        if (t.get(x, 1) == 8) then
+        if (t.get(x, 1) == -1) then
             return false
         end
     end
@@ -1882,9 +2079,12 @@ function t.set(x, y, piece_type)
     board[y][x] = piece_type
 end
 
-function t.clear_line(y)
-    for j = y, t.board.height_ex - 1 do
-        board[j] = deep_copy(board[j + 1])
+function t.clear_line(h)
+    for y = h, t.board.height_ex - 1 do
+        for x = 1, t.board.width do
+            local got = t.get(x, y + 1)
+            t.set(x, y, got)
+        end
     end
     return true
 end
@@ -1922,6 +2122,32 @@ Formula: (s+1-i)+(s-j)*s
 1 4 7
 Formula: (i-1)*s+(s+1-j)
 
+##############################
+
+## rot 4 ## (0)
+3 2 1
+6 5 4
+9 8 7
+Formula: (s+1-i)+(j-1)*s
+
+## rot 5 ## (1)
+1 4 7
+2 5 8
+3 6 9
+Formula: (i-1)*s+j
+
+## rot 6 ## (2)
+7 8 9
+4 5 6
+1 2 3
+Formula: i+(s-j)*s
+
+## rot 7 ## (3)
+9 6 3
+8 5 2
+7 4 1
+Formula: (s-i)*s+(s+1-j)
+
 --]]
     
 function t.rotate_piece(piece_type, rot)
@@ -1941,6 +2167,14 @@ function t.rotate_piece(piece_type, rot)
                         store = b[(s+1-i)+(s-j)*s]
                     elseif rot == 3 then
                         store = b[(i-1)*s+(s+1-j)]
+                    elseif rot == 4 then
+                        store = b[(s+1-i)+(j-1)*s]
+                    elseif rot == 5 then
+                        store = b[(i-1)*s+j]
+                    elseif rot == 6 then
+                        store = b[i+(s-j)*s]
+                    elseif rot == 7 then
+                        store = b[(s-i)*s+(s+1-j)]
                     end
                     ans[i+(j-1)*s] = store
                     --[[
@@ -1986,8 +2220,12 @@ function t.print_board()
         for i = 0, t.board.width do
             if t.get(i, j) == nil then
                 p = p .. " "
+            elseif t.get(i, j) == -1 then
+                p = p .. "X"
+            elseif t.get(i, j) < 10 then
+                p = p .. t.get(i, j)
             elseif t.get(i, j) ~= 0 then
-                p = p .. "#"
+                p = p .. "O"
             else
                 p = p .. "-"
             end
@@ -2087,7 +2325,7 @@ function t.paint(gc, pieces)
                 set_color_black(gc, block_colors[b], 0.2)
                 fill_rect_size(gc, start_x + x * size + ox, start_y + window_height - y * size + oy, size, size, 0.6)
             else
-                if b > 0 then
+                if b ~= 0 then
                     fill_rect(gc, start_x + x * size + ox, start_y + window_height - y * size + oy, size, size, block_colors[b])
                 end
             end
@@ -2189,7 +2427,7 @@ function main_menu.paint(gc)
     
     -- selector
     local select_dx = sin(main_menu.time) * 500 / (main_menu.time ^ 2)
-    fill_rect(gc, main_menu.selector - 5 + select_dx, 140, 10, 10, block_colors[8])
+    fill_rect(gc, main_menu.selector - 5 + select_dx, 140, 10, 10, block_colors[-1])
     
     set_font(gc, 8)
     draw_string_plop(gc, VERSION, window_width / 2, 200, "white")
@@ -2230,7 +2468,7 @@ end
 -- @menu
 
 menu.options = {
-    "Practice", "Lines", "Timed", "Clear", "Level", "Funny"
+    "Practice", "Lines", "Timed", "Clear", "Level", "Send", "Funny"
 }
 
 function menu.start()
@@ -2304,7 +2542,9 @@ function menu.charIn(char)
         elseif s == 5 then
             play.start("level", "score")
         elseif s == 6 then
-            play.start("funny", 0)
+            play.start("send", 0)
+        elseif s == 7 then
+            play.start("funny", "penta")
         end
     elseif char == "esc" then
         main_menu.start()
@@ -2358,6 +2598,8 @@ play.settings = {
     rotate_right_2 = "-",
     rotate_180 = "3",
     rotate_180_2 = "",
+    rotate_mirror = "−",
+    rotate_mirror_2 = "m",
     save_piece = "5",
     save_piece_2 = " ",
     quit = "esc",
@@ -2366,7 +2608,6 @@ play.settings = {
     pause_2 = "p",
     restart = "=",
     restart_2 = "r",
---     rotate_flip = "8",
 }
 
 function play.start(play_mode, args)
@@ -2380,7 +2621,7 @@ function play.start(play_mode, args)
     play.target_time = -1 -- seconds
     
     if play_mode == "funny" then
-        play.switch_block_table("funny")
+        play.switch_block_table(args)
     else
         play.switch_block_table("normal")
     end
@@ -2398,6 +2639,8 @@ function play.start(play_mode, args)
     elseif play_mode == "level" then
         play.level = 1
         play.gravity = 10
+    elseif play_mode == "send" then
+        -- ?
     elseif play_mode == "funny" then
         -- already changed
     end
@@ -2442,9 +2685,7 @@ end
 
 function play.switch_block_table(block_mode)
     blocks = block_storage[block_mode]
-    blocks_rotated = {
-        {}, {}, {}, {}, {}, {}, {}
-    }
+    blocks_rotated = new_blocks_rotated()
 end
 
 function play.new_piece(piece_type, just_saved)
@@ -2452,12 +2693,18 @@ function play.new_piece(piece_type, just_saved)
         type = piece_type or play.get_piece(1),
         done = -1,
         rot = 0,
-        x = 4,
+        x = -1,
         y = 22,
     }
     
     local p = play.piece
-    if t.check_piece(p.type, p.rot, p.x, p.y) then
+    for i = 1, #blocks_x_check do
+        if not t.check_piece(p.type, p.rot, blocks_x_check[i], p.y) then
+            p.x = blocks_x_check[i]
+            break
+        end
+    end
+    if p.x == -1 then
         play.init_fail()
     end
     
@@ -2554,7 +2801,11 @@ function play.get_piece(index)
 end
 
 function play.add_pieces()
-    local shuffled = random.shuffle({1, 2, 3, 4, 5, 6, 7})
+    local shuffle_table = { }
+    for i = 1, #blocks do
+        shuffle_table[i] = i
+    end
+    local shuffled = random.shuffle(shuffle_table)
     for i, v in ipairs(shuffled) do
         play.queue:push_right(v)
     end
@@ -2643,11 +2894,8 @@ function play.paint(gc)
     
     for i = 1, 5 do
         local piece = play.get_piece(i)
-        if piece == 7 then
-            t.paint_piece(gc, piece, 0, ox + ex + 30, oy + sy - 20 + 30 * i)
-        else
-            t.paint_piece(gc, piece, 0, ox + ex + 30, oy + sy - 10 + 30 * i)
-        end
+        local piece_offset = 1 + (blocks.offset[piece] or 0)
+        t.paint_piece(gc, piece, 0, ox + ex + 30, oy + sy - 10 * piece_offset + 30 * i)
     end
     
     set_font(gc, 11)
@@ -2747,6 +2995,9 @@ function play.add_piece()
     play.lines = play.lines + count
     play.disp_lines = count
     play.disp_lines_score = lines_score[count]
+    if play.disp_lines_score == nil then
+        play.disp_lines_score = 0
+    end
         
     -- all clear!
     if t.check_line_empty(1) then
@@ -2786,6 +3037,13 @@ function play.add_piece()
     if play.mode == "clear" and t.check_clear_empty() then
         play.done = true
         play.fail_time = play.time
+    end
+    
+    if play.mode == "send" then
+        local to_send = lines_garbage[play.disp_lines]
+        if to_send ~= nil then
+            t.send_garbage(to_send)
+        end
     end
     
     play.new_piece()
@@ -2853,16 +3111,37 @@ function play.move(dx, dy, from_drop, hard_drop)
     return blocked
 end
 
-function play.rotate(dr)
+function play.rotate(dr, mirror)
     local p = play.piece
+    local mirror = mirror or false
+    -- get new rotation
     local new_rot = (p.rot + dr + 4) % 4
-    local key = (p.rot) .. " " .. (new_rot)
-    local rs = srs -- rotation system
+    if p.rot >= 4 then
+        if mirror then
+            new_rot = p.rot - 4
+        else
+            new_rot = new_rot + 4
+        end
+    else
+        if mirror then
+            new_rot = p.rot + 4
+        end
+    end
+    
+    -- find the key
+    local key_1 = p.rot % 4
+    local key_2 = new_rot % 4
+    local key = key_1 .. " " .. key_2
+    
+    -- rotation system
+    local rs = srs
     if p.type == 7 and blocks.mode == "normal" then
+        -- return on O piece (box)
         return
     elseif p.type == 1 then
         rs = srsi
     end
+    
     -- rotate!
     for i = 1, 5 do
         local offset = rs[key][i]
@@ -2938,6 +3217,10 @@ function play.charIn(char)
             play.rotate(1)
         elseif char == play.settings.rotate_180 or char == play.settings.rotate_180_2 then
             play.rotate(2)
+        elseif char == play.settings.rotate_mirror or char == play.settings.rotate_mirror_2 then
+            if blocks.mirror then
+                play.rotate(0, true)
+            end
         elseif char == play.settings.save_piece or char == play.settings.save_piece_2 then
             play.save_piece()
         elseif char == play.settings.pause or char == play.settings.pause_2 then
@@ -3080,6 +3363,7 @@ settings.controls = {
     "move_right_all=Hard Right",
     "soft_drop_all=Hard Soft Drop",
     "save_piece=Hold",
+    "rotate_mirror=Mirror",
     "pause=Pause",
     "restart=Restart",
     "quit=Quit",
