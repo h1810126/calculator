@@ -1,5 +1,6 @@
 ## calculator
 
-Some calculator programs.
+Some calculator programs for the TI-Nspire™ CX (CAS optional).
 
-[`tetris`](/t/): A Tetris program to run in the TI-Nspire Graphing Calculator.
+[`tetris`](/t/): Tetris...
+[`TD`](/d/): TD, not updated anymore.
