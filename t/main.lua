@@ -334,85 +334,85 @@ local function make_deque()
     -- MIT licensed
     
     local push_right = function(self, x)
-      assert(x ~= nil)
-      self.tail = self.tail + 1
-      self[self.tail] = x
+        assert(x ~= nil)
+        self.tail = self.tail + 1
+        self[self.tail] = x
     end
     
     local push_left = function(self, x)
-      assert(x ~= nil)
-      self[self.head] = x
-      self.head = self.head - 1
+        assert(x ~= nil)
+        self[self.head] = x
+        self.head = self.head - 1
     end
     
     local peek_right = function(self)
-      return self[self.tail]
+        return self[self.tail]
     end
     
     local peek_left = function(self)
-      return self[self.head+1]
+        return self[self.head+1]
     end
     
     local pop_right = function(self)
-      if self:is_empty() then return nil end
-      local r = self[self.tail]
-      self[self.tail] = nil
-      self.tail = self.tail - 1
-      return r
+        if self:is_empty() then return nil end
+        local r = self[self.tail]
+        self[self.tail] = nil
+        self.tail = self.tail - 1
+        return r
     end
     
     local pop_left = function(self)
-      if self:is_empty() then return nil end
-      local r = self[self.head+1]
-      self.head = self.head + 1
-      local r = self[self.head]
-      self[self.head] = nil
-      return r
+        if self:is_empty() then return nil end
+        local r = self[self.head+1]
+        self.head = self.head + 1
+        local r = self[self.head]
+        self[self.head] = nil
+        return r
     end
     
     local rotate_right = function(self, n)
-      n = n or 1
-      if self:is_empty() then return nil end
-      for i=1,n do self:push_left(self:pop_right()) end
+        n = n or 1
+        if self:is_empty() then return nil end
+        for i=1,n do self:push_left(self:pop_right()) end
     end
     
     local rotate_left = function(self, n)
-      n = n or 1
-      if self:is_empty() then return nil end
-      for i=1,n do self:push_right(self:pop_left()) end
+        n = n or 1
+        if self:is_empty() then return nil end
+        for i=1,n do self:push_right(self:pop_left()) end
     end
     
     local _remove_at_internal = function(self, idx)
-      for i=idx, self.tail do self[i] = self[i+1] end
-      self.tail = self.tail - 1
+        for i=idx, self.tail do self[i] = self[i+1] end
+        self.tail = self.tail - 1
     end
     
     local remove_right = function(self, x)
-      for i=self.tail,self.head+1,-1 do
-        if self[i] == x then
-          _remove_at_internal(self, i)
-          return true
+        for i=self.tail,self.head+1,-1 do
+            if self[i] == x then
+                _remove_at_internal(self, i)
+                return true
+            end
         end
-      end
-      return false
+        return false
     end
     
     local remove_left = function(self, x)
-      for i=self.head+1,self.tail do
-        if self[i] == x then
-          _remove_at_internal(self, i)
-          return true
+        for i=self.head+1,self.tail do
+            if self[i] == x then
+                _remove_at_internal(self, i)
+                return true
+            end
         end
-      end
-      return false
+        return false
     end
     
     local length = function(self)
-      return self.tail - self.head
+        return self.tail - self.head
     end
     
     local is_empty = function(self)
-      return self:length() == 0
+        return self:length() == 0
     end
     
     local contents = function(self)
@@ -438,45 +438,46 @@ local function make_deque()
     end
     
     local iter_left = function(self)
-      local i = self.head
-      return function()
-        if i < self.tail then
-          i = i+1
-          return self[i]
+        local i = self.head
+        return function()
+            if i < self.tail then
+                i = i+1
+                return self[i]
+            end
         end
-      end
     end
     
     local methods = {
-      push_right = push_right,
-      push_left = push_left,
-      peek_right = peek_right,
-      peek_left = peek_left,
-      pop_right = pop_right,
-      pop_left = pop_left,
-      rotate_right = rotate_right,
-      rotate_left = rotate_left,
-      remove_right = remove_right,
-      remove_left = remove_left,
-      iter_right = iter_right,
-      iter_left = iter_left,
-      length = length,
-      is_empty = is_empty,
-      contents = contents,
-      get = get,
+        push_right = push_right,
+        push_left = push_left,
+        peek_right = peek_right,
+        peek_left = peek_left,
+        pop_right = pop_right,
+        pop_left = pop_left,
+        rotate_right = rotate_right,
+        rotate_left = rotate_left,
+        remove_right = remove_right,
+        remove_left = remove_left,
+        iter_right = iter_right,
+        iter_left = iter_left,
+        length = length,
+        is_empty = is_empty,
+        contents = contents,
+        get = get,
     }
     
     local new = function()
-      local r = {head = 0, tail = 0}
-      return setmetatable(r, {__index = methods})
+        local r = {head = 0, tail = 0}
+        return setmetatable(r, {__index = methods})
     end
     
     return {
-      new = new,
+        new = new,
     }
 end
 
 local queue_lib = make_deque()
+local make_queue = queue_lib.new
 
 -- @image template
 
@@ -2430,7 +2431,7 @@ function v.recall()
     end
 end
 
-local VERSION = "v4.1"
+local VERSION = "v4.7.0"
 
 -- @main menu
 
@@ -2614,25 +2615,25 @@ play.settings = {
     
     -- controls
     move_left = "4",
-    move_left_2 = "",
+    move_left_2 = "left",
     move_right = "6",
-    move_right_2 = "",
+    move_right_2 = "right",
     move_left_all = "(",
-    move_left_all_2 = "",
+    move_left_all_2 = "^2",
     move_right_all = ")",
-    move_right_all_2 = "",
+    move_right_all_2 = "*",
     hard_drop = "8",
-    hard_drop_2 = "",
+    hard_drop_2 = "up",
     soft_drop = "2",
-    soft_drop_2 = "",
+    soft_drop_2 = "down",
     soft_drop_all = "1",
-    soft_drop_all_2 = "",
+    soft_drop_all_2 = "enter",
     rotate_left = "7",
     rotate_left_2 = "+",
     rotate_right = "9",
     rotate_right_2 = "-",
     rotate_180 = "3",
-    rotate_180_2 = "",
+    rotate_180_2 = "/",
     rotate_mirror = "−",
     rotate_mirror_2 = "m",
     save_piece = "5",
@@ -2689,11 +2690,12 @@ function play.init()
     play.time = 0
     play.score = 0
     play.disp_score = 0
-    play.queue = queue_lib.new()
+    play.queue = make_queue()
     play.gravity = play.settings.gravity
     play.drop_timer = play.gravity
     play.fail = false
     play.fail_time = -1
+    play.fail_time_milli = -1
     play.done = false
     play.done_time = -1
     play.saved_piece = 0
@@ -2709,6 +2711,7 @@ function play.init()
     play.disp_lines_score = 0
     play.level = 0
     play.paused = false
+    play.milliseconds = timer.getMilliSecCounter()
     play.new_piece()
     
     if play.gravity == 17 then
@@ -2716,6 +2719,10 @@ function play.init()
     elseif play.gravity == 20 then
         play.gravity = 1000000000
     end
+end
+
+function play.get_time()
+    return (timer.getMilliSecCounter() - play.milliseconds) / 1000
 end
 
 function play.switch_block_table(block_mode)
@@ -2787,6 +2794,7 @@ function play.init_fail()
     if not play.fail then
         play.fail = true
         play.fail_time = play.time
+        play.fail_time_milli = timer.getMilliSecCounter()
     end
 end
 
@@ -2796,7 +2804,7 @@ end
 
 function play.update_gravity()
     if play.mode_args == "time" then
-        local sec = play.time / 20
+        local sec = play.get_time()
         for i = 0, total_levels do
             if sec < level_time[i] then
                 play.level = i
@@ -2924,9 +2932,11 @@ function play.paint(gc)
     set_font(gc, 11)
     local time = 0
     if play.mode == "timed" then
-        time = play.target_time - play.time / 20
+        --time = play.target_time - play.time / 20
+        time = play.target_time - play.get_time()
     else
-        time = play.time / 20
+        --time = play.time / 20
+        time = play.get_time()
     end
     local time_seconds = (time) % 60
     local time_minutes = floor(time / 60)
@@ -2967,9 +2977,10 @@ function play.timer()
     
     play.time = play.time + 1
     
-    if not play.done and play.mode == "timed" and (play.time / 20) >= play.target_time then
+    if not play.done and play.mode == "timed" and play.get_time() >= play.target_time then
         play.done = true
         play.fail_time = play.time
+        play.fail_time_milli = timer.getMilliSecCounter()
     end
     
     if play.mode == "level" then
@@ -3087,14 +3098,12 @@ function play.add_piece()
     
     play.score = play.score + play.disp_lines_score
     
-    if play.mode == "lines" and play.lines >= play.target_lines then
+    if 
+      (play.mode == "lines" and play.lines >= play.target_lines) or
+      (play.mode == "clear" and t.check_clear_empty()) then
         play.done = true
         play.fail_time = play.time
-    end
-    
-    if play.mode == "clear" and t.check_clear_empty() then
-        play.done = true
-        play.fail_time = play.time
+        play.fail_time_milli = timer.getMilliSecCounter()
     end
     
     if play.mode == "send" then
@@ -3294,7 +3303,8 @@ end
 function play.get_info()
     local i = {}
     i.info = true
-    i.time = play.fail_time / 20
+    --i.time = play.fail_time / 20
+    i.time = (play.fail_time_milli - play.milliseconds) / 1000
     i.lines = play.lines
     i.score = play.score
     i.mode = play.mode
@@ -3370,7 +3380,12 @@ function settings.start()
     settings.sz = 0
     settings.tx = 1
     settings.ty = 1
+    settings.login_show = false
+    settings.create_show = false
+    settings.username = ""
+    settings.password = ""
     settings.number = #settings.draw
+
 end
 
 function settings.paint(gc)
@@ -3403,7 +3418,15 @@ function settings.paint(gc)
     set_font(gc, 11)
     draw_string_plop_both(gc, "Controls", tab_w / 2, 10, "white")
     draw_string_plop_both(gc, "Gameplay", 3 * tab_w / 2, 10, "white")
-    draw_string_plop_both(gc, "About", 5 * tab_w / 2, 10, "white")
+    draw_string_plop_both(gc, "Account", 5 * tab_w / 2, 10, "white")
+    
+    if settings.login_show then
+        settings.draw.login(gc, 0, 0)
+    end
+    
+    if settings.create_show then
+        settings.draw.create(gc, 0, 0)
+    end
     
 end
 
@@ -3498,7 +3521,23 @@ end
 
 settings.draw[3] = function(gc, ox, oy)
     set_font(gc, 11)
-    draw_string_plop_both(gc, "About", window_width / 2 + ox, window_height / 2 + oy, "white")
+    draw_string_plop_both(gc, "this feature is not coming soon", window_width / 2 + ox, window_height - (settings.time * 4) % (window_height - oy + 10), "white")
+end
+
+settings.draw.login = function(gc, ox, oy)
+    set_font(gc, 11)
+    fill_rect(gc, 20, 20, window_width - 40, window_height - 40, "dimgrey")
+    settings.draw.userpass(gc, ox, oy)
+end
+    
+settings.draw.create = function(gc, ox, oy)
+    set_font(gc, 11)
+    fill_rect(gc, 20, 20, window_width - 40, window_height - 40, "dimgrey")
+    settings.draw.userpass(gc, ox, oy)
+end
+    
+settings.draw.userpass = function(gc, ox, oy)
+    
 end
 
 function settings.timer()
@@ -3532,9 +3571,17 @@ function settings.charIn(char)
     local dx = 0
     local dy = 0
     local dz = false
+    local str = ""
     
     if char == play.settings.quit or char == play.settings.quit_2 then
-        main_menu.start()
+        if settings.login_show then
+            settings.login_show = false
+            return
+        elseif false then
+            settings.login_show = false
+        else
+            main_menu.start()
+        end
     end
     
     if char == "left" or char == "4" then
@@ -3551,6 +3598,8 @@ function settings.charIn(char)
         dt = 1
     elseif char == "enter" then
         dz = true
+    else
+        str = char
     end
     
     if dx ~= 0 then
@@ -3576,6 +3625,15 @@ function settings.charIn(char)
             settings.tx = 1
             settings.ty = 1
         end
+    end
+    
+    if settings.login_show or settings.create_show then
+        if char == "backspace" then
+            settings.username = string.sub(settings.login_username, 1, -2)
+        elseif str ~= "" then
+            settings.username = settings.login_username .. str
+        end
+        return -- skip tab char section
     end
     
     -- tab char
@@ -3633,7 +3691,10 @@ function settings.charIn(char)
         
     elseif settings.target_tab == 3 then
         
-        -- about
+        -- account
+        if dz then
+            settings.login_show = true
+        end
         
     end
 end
