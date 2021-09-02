@@ -1144,10 +1144,27 @@ end
 
 -- draw string (alignment) functions
 
-local function draw_string(gc, string, x, y, color)
+local draw_string, draw_string_plop, draw_string_plop_both, draw_string_plop_left, draw_string_plop_right
+
+function draw_string(gc, string, x, y, color, align)
     -- optimisation checks
     if x > window_width or y > window_height or string == nil then
         return
+    end
+    
+    if align == nil or align == "" then
+    
+    elseif align == "centre" or align == "center" then
+        draw_string_plop_both(gc, string, x, y, color)
+        return
+    elseif align == "left" then
+        draw_string_plop_left(gc, string, x, y, color)
+        return
+    elseif align == "right" then
+        draw_string_plop_right(gc, string, x, y, color)
+        return
+    else
+        
     end
     
     if type(string) == "number" then
@@ -1161,12 +1178,7 @@ local function draw_string(gc, string, x, y, color)
     _context.draw.string = _context.draw.string + 1
 end
 
-local function draw_string_plop(gc, string, x, y, color)
-    -- optimisation checks
-    if x > window_width or y > window_height or string == nil then
-        return
-    end
-    
+function draw_string_plop(gc, string, x, y, color)
     if type(string) == "number" then
         string = number_to_string(string)
     end
@@ -1178,12 +1190,7 @@ local function draw_string_plop(gc, string, x, y, color)
     _context.draw.string = _context.draw.string + 1
 end
 
-local function draw_string_plop_both(gc, string, x, y, color)
-    -- optimisation checks
-    if x > window_width or y > window_height then
-        return
-    end
-    
+function draw_string_plop_both(gc, string, x, y, color)    
     if type(string) == "number" then
         string = number_to_string(string)
     end
@@ -1195,7 +1202,7 @@ local function draw_string_plop_both(gc, string, x, y, color)
     _context.draw.string = _context.draw.string + 1
 end
     
-local function draw_string_plop_left(gc, string, x, y, color)
+function draw_string_plop_left(gc, string, x, y, color)
     -- optimisation checks
     if x > window_width or y > window_height then
         return
@@ -1212,7 +1219,7 @@ local function draw_string_plop_left(gc, string, x, y, color)
     _context.draw.string = _context.draw.string + 1
 end
 
-local function draw_string_plop_right(gc, string, x, y, color)
+function draw_string_plop_right(gc, string, x, y, color)
     -- optimisation checks
     if x > window_width or y > window_height then
         return
@@ -1492,6 +1499,7 @@ play_end = {}
 settings = {}
 lb = {}
 lbs = {}
+replays = {}
 
 mode = "main_menu"
 modes = { main_menu = main_menu, menu = menu, play = play, play_end = play_end, settings = settings, lb = lb }
@@ -2414,6 +2422,7 @@ v.t = {}
 
 function v.store()
     v.t.settings = deep_copy(play.settings)
+    v.t.replays = deep_copy(replays)
     -- v.t.lbs = deep_copy(lbs)
     local s = serialize(v.t)
     var.store("tetris", s)
@@ -2427,11 +2436,12 @@ function v.recall()
     if s ~= nil then
         v.t = deserialize(s)
         play.settings = deep_copy(v.t.settings)
+        replays = deep_copy(v.t.replays)
         -- lbs = deep_copy(v.t.lbs)
     end
 end
 
-local VERSION = "v4.7.0"
+local VERSION = "v4.7.3"
 
 -- @main menu
 
@@ -2966,7 +2976,7 @@ function play.paint(gc)
     if play.paused then
         fill_rect(gc, 20, 20, window_width - 40, window_height - 40, "dimgrey")
         set_font(gc, 11)
-        draw_string_plop_both(gc, "PAUSED", window_width / 2, window_height / 2, "white")
+        draw_string(gc, "PAUSED", window_width / 2, window_height / 2, "white", "centre")
     end
 end
 
@@ -3382,6 +3392,9 @@ function settings.start()
     settings.ty = 1
     settings.login_show = false
     settings.create_show = false
+    settings.replay_show = false
+    settings.replay_sx = 1
+    settings.replay_tx = 1
     settings.username = ""
     settings.password = ""
     settings.number = #settings.draw
@@ -3408,10 +3421,10 @@ function settings.paint(gc)
     fill_rect(gc, 0, 0, window_width, 25, "black")
     fill_rect(gc, (settings.tab * tab_w) - tab_w, 0, tab_w, 25, "dimgrey")
     if settings.target_tab > 1 then
-        draw_string_plop_both(gc, "+", (settings.tab * tab_w) - tab_w + 5, 10, "white")
+        draw_string(gc, "+", (settings.tab * tab_w) - tab_w + 5, 10, "white", "centre")
     end
     if settings.target_tab < 3 then
-        draw_string_plop_both(gc, "-", (settings.tab * tab_w) - 5, 10, "white")
+        draw_string(gc, "-", (settings.tab * tab_w) - 5, 10, "white", "centre")
     end
     draw_polyline(gc, { 0, 25, window_width, 25 }, "white")
     
@@ -3485,38 +3498,63 @@ end
 
 settings.draw[2] = function(gc, ox, oy)
     
-    local g = play.settings.gravity
-    if settings.ty == 1 then
-        g = settings.tx
-    end
-    local g_str = g
-    if g == 17 then
-        g_str = 20
-    end
-    if g == 20 then
-        g_str = "INF"
+    if settings.replay_show then
+        
+        -- todo
+        
+    -- end of replay_show
+    else
+        
+        local c = "white"
+        if settings.ty == 1 then
+            c = set_color_mix(gc, "orange", "red", bounce(settings.time, 10))
+        end
+        set_font(gc, 11)
+        draw_rect(gc, 110 + ox, 10 + oy, window_width - 220, 25, c)
+        c = block_colors[math.floor(settings.time / 10) % 7 + 1]
+        draw_string(gc, "Replay", window_width / 2 + ox, 22.5 + oy, c, "centre")
+    
+        local g = play.settings.gravity
+        if settings.ty == 2 then
+            g = settings.tx
+        end
+        local g_str = g
+        if g == 17 then
+            g_str = 20
+        end
+        if g == 20 then
+            g_str = "INF"
+        end
+        
+        draw_polyline(gc, { 0 + ox, 50 + oy, window_width + ox, 50 + oy }, "darkgrey")
+        
+        set_font(gc, 10)
+        local y = 75 + oy
+        draw_string_plop_left(gc, "Gravity", 10 + ox, y, "white")
+        fill_circle(gc, 2, 75 + ox, y, "dimgrey")
+        fill_rect(gc, 75 + ox, y - 2, 200, 4, "dimgrey")
+        fill_circle(gc, 2, 275 + ox, y, "dimgrey")
+        fill_circle(gc, 6, 75 + ox + 10 * g, y, "white")
+        draw_string_plop_left(gc, g_str, 290 + ox, y, "white")
+        
+        local t = play.settings.ghost * 20
+        if settings.ty == 3 then
+            t = settings.tx
+        end
+        y = y + 40
+        draw_string_plop_left(gc, "Shadow", 10 + ox, y, "white")
+        fill_circle(gc, 2, 75 + ox, y, "dimgrey")
+        fill_rect(gc, 75 + ox, y - 2, 200, 4, "dimgrey")
+        fill_circle(gc, 2, 275 + ox, y, "dimgrey")
+        fill_circle(gc, 6, 75 + ox + 10 * t, y, "white")
+        draw_string_plop_left(gc, tostring(t * 5) .. "%", 290 + ox, y, "white")
+        
+        if settings.ty >= 2 and settings.ty <= 3 then
+            fill_circle(gc, 6, 75 + ox + round(settings.sx * 10), 2 * round(settings.sy * 20) - 5 + oy, "orange")
+        end
+    -- end of not replay_show
     end
     
-    set_font(gc, 10)
-    draw_string_plop_left(gc, "Gravity", 10 + ox, 30 + oy, "white")
-    fill_circle(gc, 2, 75 + ox, 30 + oy, "dimgrey")
-    fill_rect(gc, 75 + ox, 28 + oy, 200, 4, "dimgrey")
-    fill_circle(gc, 2, 275 + ox, 30 + oy, "dimgrey")
-    fill_circle(gc, 6, 75 + ox + 10 * g, 30 + oy, "white")
-    draw_string_plop_left(gc, g_str, 290 + ox, 30 + oy, "white")
-    
-    local t = play.settings.ghost * 20
-    if settings.ty == 2 then
-        t = settings.tx
-    end
-    draw_string_plop_left(gc, "Shadow", 10 + ox, 70 + oy, "white")
-    fill_circle(gc, 2, 75 + ox, 70 + oy, "dimgrey")
-    fill_rect(gc, 75 + ox, 68 + oy, 200, 4, "dimgrey")
-    fill_circle(gc, 2, 275 + ox, 70 + oy, "dimgrey")
-    fill_circle(gc, 6, 75 + ox + 10 * t, 70 + oy, "white")
-    draw_string_plop_left(gc, tostring(t * 5) .. "%", 290 + ox, 70 + oy, "white")
-    
-    fill_circle(gc, 6, 75 + ox + round(settings.sx * 10), 2 * round(settings.sy * 20) - 10 + oy, "orange")
 end
 
 settings.draw[3] = function(gc, ox, oy)
@@ -3548,6 +3586,10 @@ function settings.timer()
     settings.sx = smooth(settings.sx, settings.tx, 0.7)
     settings.sy = smooth(settings.sy, settings.ty, 0.7)
     
+    if settings.replay_show then
+        settings.replay_sx = smooth(settings.replay_sx, settings.replay_tx, 0.7)
+    end
+    
     window:invalidate()
 end
 
@@ -3576,9 +3618,13 @@ function settings.charIn(char)
     if char == play.settings.quit or char == play.settings.quit_2 then
         if settings.login_show then
             settings.login_show = false
+            return        
+        elseif settings.create_show then
+            settings.create_show = false
             return
-        elseif false then
-            settings.login_show = false
+        elseif settings.replay_show then
+            settings.replay_show = false
+            return
         else
             main_menu.start()
         end
@@ -3610,6 +3656,7 @@ function settings.charIn(char)
         settings.sz = 1 - settings.sz
     elseif dt ~= 0 then
         settings.target_tab = (settings.target_tab + dt - 1 + settings.number) % settings.number + 1
+        settings.replay_show = false -- if not false, funny behaviour
         
         -- tab init
         if settings.target_tab == 1 then
@@ -3656,6 +3703,20 @@ function settings.charIn(char)
         if settings.ty == 0 then
             settings.ty = 1
         elseif settings.ty == 1 then
+            if settings.replay_show then
+                -- todo
+                settings.replay_tx = settings.replay_tx + dx
+                if settings.replay_tx <= 0 then
+                    settings.replay_tx = 1
+                elseif settings.replay_tx > #replays then
+                    settings.replay_tx = #replays
+                end
+            else
+                if dz then
+                    settings.replay_show = true
+                end
+            end
+        elseif settings.ty == 2 then
             if dy ~= 0 then
                 settings.tx = play.settings.gravity
             end
@@ -3673,7 +3734,7 @@ function settings.charIn(char)
                 end
                 play.settings.gravity = settings.tx
             end
-        elseif settings.ty == 2 then
+        elseif settings.ty == 3 then
             if dy ~= 0 then
                 settings.tx = play.settings.ghost * 20
             end
@@ -3685,8 +3746,8 @@ function settings.charIn(char)
                 end
                 play.settings.ghost = settings.tx / 20
             end
-        elseif settings.ty >= 3 then
-            settings.ty = 2
+        elseif settings.ty >= 4 then
+            settings.ty = 3
         end
         
     elseif settings.target_tab == 3 then
