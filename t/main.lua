@@ -245,6 +245,10 @@ function table.to_string(tt, indent, done)
     end
 end
 
+function table.print(t)
+    print(table.to_string(t))
+end
+
 function table.remove_value(table1, value)
     for k, v in pairs(table1) do
         if v == value then
@@ -2658,6 +2662,18 @@ play.settings = {
 
 function play.start(play_mode, args)
     mode = "play"
+    
+    -- init replay FIRST
+    play.replaying = false
+    play.replay = {
+        m = play_mode,
+        a = args,
+        p = {},
+        s = {},
+        t = 0,
+    }
+    play.replay_moves = make_queue()
+    
     play.init_board()
     play.init()
     
@@ -2690,10 +2706,110 @@ function play.start(play_mode, args)
     elseif play_mode == "funny" then
         -- already changed
     end
+    
+    return
 end
 
 function play.restart()
     play.start(play.mode, play.mode_args)
+end
+
+function play.start_replay(replay)
+    local replay = deep_copy(replay)
+    local replay = play.replay_decode(replay)
+    play.start(replay.m, replay.a)
+    play.replay = deep_copy(replay)
+    play.replaying = true
+    play.replay_piece = 1
+    play.replay_speed = 1
+    play.replay_time = 0
+    
+    -- fix queue
+    play.queue = make_queue()
+    play.new_piece()
+end
+
+function play.replay_encode(r)
+    
+    -- pieces
+    local p = {}
+    for i = 1, #r.p do
+        p[i] = string.char(64 + r.p[i])
+    end
+    local p = table.concat(p)
+    r.p = p
+    
+    -- moves (save memory for this!!!)
+    local s = {}
+    local consequtive = 0 -- Yuan Xi
+    local function encode_consequtive()
+        if consequtive == 0 then
+            -- do nothing
+        elseif consequtive <= 26 then
+            -- letter
+            s[#s + 1] = string.char(96 + consequtive)
+        else
+            -- number
+            s[#s + 1] = tostring(floor(consequtive))
+        end
+        consequtive = 0
+    end
+    -- LOOPS
+    for i = 1, r.t do
+        local b = r.s[i]
+        if b == nil then
+            consequtive = consequtive + 1
+        else
+            encode_consequtive()
+            s[#s + 1] = b
+        end
+    end
+    encode_consequtive()
+    local s = table.concat(s)
+    r.s = s
+    
+    return r
+    
+end
+
+function play.replay_decode(r)
+
+    table.print(r)
+
+    -- pieces
+    local p = {}
+    for i = 1, #r.p do
+        p[i] = r.p:byte(i) - 64
+    end
+    r.p = p
+    
+    -- moves
+    local s = {}
+    local t = 1
+    for i = 1, #r.s do
+        local b = r.s:sub(i, i)
+        local v = r.s:byte(i)
+        if v >= 65 and v <= 90 then
+            -- move
+            s[t] = b
+            t = t + 1
+        elseif v >= 96 and v <= 122 then
+            t = t + v - 96
+            -- consequtive
+        elseif v >= 48 and v <= 57 then
+            -- number
+            local old_i = i
+            while (v ~= nil and v >= 48 and v <= 57) do
+                i = i + 1
+                v = r.s:byte(i)
+            end
+            t = t + tonumber(r.s:sub(old_i, i - 1))
+        end
+    end
+    r.s = s
+    
+    return r
+    
 end
 
 function play.init()
@@ -2774,7 +2890,9 @@ function play.new_piece(piece_type, just_saved)
 end
 
 function play.save_piece()
-    if not play.just_saved then
+    if play.just_saved then
+        return true -- blocked = true
+    else
         local saved = play.saved_piece
         play.saved_piece = play.piece.type
         if saved ~= 0 then
@@ -2782,6 +2900,7 @@ function play.save_piece()
         else
             play.new_piece(nil, true)
         end
+        return false -- blocked = false
     end
 end
 
@@ -2854,28 +2973,36 @@ function play.get_piece(index)
 end
 
 function play.add_pieces()
-    local shuffle_table = { }
-    if blocks.multiplier == nil then
-        for i = 1, blocks.length do
-            shuffle_table[i] = i
-        end
-    else
-        local index = 1
-        local number = 1
-        local countdown = blocks.multiplier[number] or 1
-        while number <= blocks.length do
-            shuffle_table[index] = number
-            countdown = countdown - 1
-            if countdown <= 0 then
-                number = number + 1
-                countdown = blocks.multiplier[number] or 1
-            end
-            index = index + 1
-        end
-    end
-    local shuffled = random.shuffle(shuffle_table)
-    for i, v in ipairs(shuffled) do
+    if play.replaying then
+        local v = play.replay.p[play.replay_piece]
         play.queue:push_right(v)
+        play.replay_piece = play.replay_piece + 1
+    else -- not replaying
+        local shuffle_table = { }
+        if blocks.multiplier == nil then
+            for i = 1, blocks.length do
+                shuffle_table[i] = i
+            end
+        else
+            local index = 1
+            local number = 1
+            local countdown = blocks.multiplier[number] or 1
+            while number <= blocks.length do
+                shuffle_table[index] = number
+                countdown = countdown - 1
+                if countdown <= 0 then
+                    number = number + 1
+                    countdown = blocks.multiplier[number] or 1
+                end
+                index = index + 1
+            end
+        end
+        local shuffled = random.shuffle(shuffle_table)
+        for i = 1, #shuffled do
+            local v = shuffled[i]
+            play.replay.p[#play.replay.p + 1] = v -- store in replay
+            play.queue:push_right(v)
+        end
     end
 end
 
@@ -2973,6 +3100,10 @@ function play.paint(gc)
     set_font(gc, 10)
     draw_string_plop_right(gc, "Level", window_width - 5, oy + ey - 15, "white")
     
+    if play.replaying then
+        -- draw replay somewhere
+    end
+    
     if play.paused then
         fill_rect(gc, 20, 20, window_width - 40, window_height - 40, "dimgrey")
         set_font(gc, 11)
@@ -2980,7 +3111,7 @@ function play.paint(gc)
     end
 end
 
-function play.timer()
+function play.timer(meta)
     if play.paused then
         return
     end
@@ -3045,6 +3176,65 @@ function play.timer()
     
     if not new_piece then
         play.piece = p
+    end
+    
+    if play.replaying then
+        -- do move (if replaying)
+        play.replay_time = play.replay_time + 1
+        local move = play.replay.s[play.replay_time]
+        if play.replay_time > play.replay.t then
+            play.init_fail()
+        end
+        if move ~= nil then
+            if move == "A" then
+                play.move(-1, 0)
+            elseif move == "B" then
+                play.move(1, 0)
+            elseif move == "C" then
+                while not play.move(-1, 0) do end
+            elseif move == "D" then
+                while not play.move(1, 0) do end
+            elseif move == "E" then
+                play.move(0, -1, true)
+            elseif move == "F" then
+                while not play.move(0, -1, true) do end
+            elseif move == "G" then
+                while not play.move(0, -1, true) do end
+                if play.piece.done ~= 1000000 then
+                    play.piece.done = 0
+                    t.board.offset_y = 2
+                end
+            elseif move == "H" then
+                play.rotate(-1)
+            elseif move == "I" then
+                play.rotate(1)
+            elseif move == "J" then
+                play.rotate(2)
+            elseif move == "K" then
+                if blocks.mirror then
+                    play.rotate(0, true)
+                else
+                    print("Mirror mode not on!")
+                end
+            elseif move == "L" then
+                play.save_piece()
+            else
+                print("Unrecognised move: " .. move)
+            end
+        end
+        if meta == nil and play.replay_speed > 1 then
+            -- natural timer
+            play.timer(play.replay_speed)
+        elseif meta ~= nil and meta > 1 then
+            play.timer(meta - 1)
+        end
+    else
+        
+        -- record move/time (if not replaying)
+        if type(play.replay.s) == "table" then
+            play.replay.s[play.time] = play.replay_moves:pop_left()
+            play.replay.t = play.time
+        end
     end
     
     window:invalidate()
@@ -3232,10 +3422,12 @@ function play.rotate(dr, mirror)
         end
     end
     
+    local blocked = false
     play.t_spin = 0
     play.spin = 0
     if p.rot ~= new_rot then
         -- cannot rotate!!!
+        blocked = true
     else
         -- can rotate
         if p.done > -1 then
@@ -3262,6 +3454,8 @@ function play.rotate(dr, mirror)
     play.find_ghost()
     
     play.piece = p
+    
+    return blocked
 end
 
 function play.charIn(char)
@@ -3270,42 +3464,80 @@ function play.charIn(char)
             play.init_pause()
         end
     else
-        if char == play.settings.move_left or char == play.settings.move_left_2 then
-            play.move(-1, 0)
-        elseif char == play.settings.move_right or char == play.settings.move_right_2 then
-            play.move(1, 0)
-        elseif char == play.settings.move_left_all or char == play.settings.move_left_all_2 then
-            while not play.move(-1, 0) do end
-        elseif char == play.settings.move_right_all or char == play.settings.move_right_all_2 then
-            while not play.move(1, 0) do end
-        elseif char == play.settings.soft_drop or char == play.settings.soft_drop_2 then
-            play.move(0, -1, true)
-        elseif char == play.settings.soft_drop_all or char == play.settings.soft_drop_all_2 then
-            while not play.move(0, -1, true) do end
-        elseif char == play.settings.hard_drop or char == play.settings.hard_drop_2 then
-            while not play.move(0, -1, true) do end
-            if play.piece.done ~= 1000000 then
-                play.piece.done = 0
-                t.board.offset_y = 2
+        if play.replaying then
+            if char == play.settings.move_left or char == play.settings.move_left_2 then
+                if play.replay_speed > 1 then
+                    play.replay_speed = play.replay_speed - 1
+                end
+            elseif char == play.settings.move_right or char == play.settings.move_right_2 then
+                if play.replay_speed < 5 then
+                    play.replay_speed = play.replay_speed + 1
+                end
+            elseif char == play.settings.quit or char == play.settings.quit_2 then
+                play.init_fail()
             end
-        elseif char == play.settings.rotate_left or char == play.settings.rotate_left_2 then
-            play.rotate(-1)
-        elseif char == play.settings.rotate_right or char == play.settings.rotate_right_2 then
-            play.rotate(1)
-        elseif char == play.settings.rotate_180 or char == play.settings.rotate_180_2 then
-            play.rotate(2)
-        elseif char == play.settings.rotate_mirror or char == play.settings.rotate_mirror_2 then
-            if blocks.mirror then
-                play.rotate(0, true)
+        else -- not replaying
+            local move = ""
+            if char == play.settings.move_left or char == play.settings.move_left_2 then
+                if not play.move(-1, 0) then
+                    move = "A"
+                end
+            elseif char == play.settings.move_right or char == play.settings.move_right_2 then
+                if not play.move(1, 0) then
+                    move = "B"
+                end
+            elseif char == play.settings.move_left_all or char == play.settings.move_left_all_2 then
+                while not play.move(-1, 0) do end
+                move = "C"
+            elseif char == play.settings.move_right_all or char == play.settings.move_right_all_2 then
+                while not play.move(1, 0) do end
+                move = "D"
+            elseif char == play.settings.soft_drop or char == play.settings.soft_drop_2 then
+                play.move(0, -1, true)
+                move = "E"
+            elseif char == play.settings.soft_drop_all or char == play.settings.soft_drop_all_2 then
+                while not play.move(0, -1, true) do end
+                move = "F"
+            elseif char == play.settings.hard_drop or char == play.settings.hard_drop_2 then
+                while not play.move(0, -1, true) do end
+                if play.piece.done ~= 1000000 then
+                    play.piece.done = 0
+                    t.board.offset_y = 2
+                end
+                move = "G"
+            elseif char == play.settings.rotate_left or char == play.settings.rotate_left_2 then
+                if not play.rotate(-1) then
+                    move = "H"
+                end
+            elseif char == play.settings.rotate_right or char == play.settings.rotate_right_2 then
+                if not play.rotate(1) then
+                    move = "I"
+                end
+            elseif char == play.settings.rotate_180 or char == play.settings.rotate_180_2 then
+                if not play.rotate(2) then
+                    move = "J"
+                end
+            elseif char == play.settings.rotate_mirror or char == play.settings.rotate_mirror_2 then
+                if blocks.mirror then
+                    if not play.rotate(0, true) then
+                        move = "K"
+                    end
+                end
+            elseif char == play.settings.save_piece or char == play.settings.save_piece_2 then
+                if not play.save_piece() then
+                    move = "L"
+                end
+            elseif char == play.settings.pause or char == play.settings.pause_2 then
+                play.init_pause()
+            elseif char == play.settings.restart or char == play.settings.restart_2 then
+                play.restart()
+            elseif char == play.settings.quit or char == play.settings.quit_2 then
+                play.init_fail()
             end
-        elseif char == play.settings.save_piece or char == play.settings.save_piece_2 then
-            play.save_piece()
-        elseif char == play.settings.pause or char == play.settings.pause_2 then
-            play.init_pause()
-        elseif char == play.settings.restart or char == play.settings.restart_2 then
-            play.restart()
-        elseif char == play.settings.quit or char == play.settings.quit_2 then
-            play.init_fail()
+            -- log moves (not replaying)
+            if move ~= "" then
+                play.replay_moves:push_right(move)
+            end
         end
     end
 end
@@ -3325,6 +3557,12 @@ function play_end.start(info)
     mode = "play_end"
     play_end.time = 0
     play_end.info = deep_copy(info)
+    if play.replaying then
+        -- don't save the replay!
+    else
+        play_end.replay = play.replay_encode(play.replay)
+        replays[1] = deep_copy(play_end.replay)
+    end
 end
 
 function play_end.paint(gc)
@@ -3395,6 +3633,7 @@ function settings.start()
     settings.replay_show = false
     settings.replay_sx = 1
     settings.replay_tx = 1
+    settings.replay_delete = false
     settings.username = ""
     settings.password = ""
     settings.number = #settings.draw
@@ -3420,6 +3659,7 @@ function settings.paint(gc)
             
     fill_rect(gc, 0, 0, window_width, 25, "black")
     fill_rect(gc, (settings.tab * tab_w) - tab_w, 0, tab_w, 25, "dimgrey")
+    set_font(gc, 10)
     if settings.target_tab > 1 then
         draw_string(gc, "+", (settings.tab * tab_w) - tab_w + 5, 10, "white", "centre")
     end
@@ -3500,7 +3740,32 @@ settings.draw[2] = function(gc, ox, oy)
     
     if settings.replay_show then
         
-        -- todo
+        -- draw number box(es)
+        set_font(gc, 11)
+        local x = settings.replay_sx + window_width / 2
+        local y = 20
+        local size = 30
+        local c = "white"
+        for i = 1, #replays do
+            c = "white"
+            if settings.replay_tx == i then
+                c = set_color_mix(gc, "orange", "red", bounce(settings.time, 10))
+            elseif replays[i] ~= nil then
+                c = "orange"
+            end
+            draw_rect(gc, x + ox - size / 2, y + oy - size / 2, size, size, c)
+            draw_string(gc, i - 1, x + ox + 1, y + oy, "white", "centre")
+            x = x + 30
+        end
+        draw_polyline(gc, { 0 + ox, 50 + oy, window_width + ox, 50 + oy }, "darkgrey")
+        local r = replays[settings.replay_tx]
+        local time = #r.s
+        local bytes = #r.s + #r.p
+        set_font(gc, 11)
+        draw_string(gc, "Mode: " .. r.m, window_width / 2, 70 + oy, "white", "centre")
+        draw_string(gc, "Frames: " .. tostring(time), window_width / 2, 100 + oy, "white", "centre")
+        set_font(gc, 10)
+        draw_string(gc, tostring(bytes) .. " bytes", window_width / 2, 160 + oy, "white", "centre")
         
     -- end of replay_show
     else
@@ -3653,7 +3918,9 @@ function settings.charIn(char)
     elseif dy ~= 0 then
         settings.ty = settings.ty + dy
     elseif dz then
-        settings.sz = 1 - settings.sz
+        if settings.target_tab == 1 then
+            settings.sz = 1 - settings.sz
+        end
     elseif dt ~= 0 then
         settings.target_tab = (settings.target_tab + dt - 1 + settings.number) % settings.number + 1
         settings.replay_show = false -- if not false, funny behaviour
@@ -3710,6 +3977,9 @@ function settings.charIn(char)
                     settings.replay_tx = 1
                 elseif settings.replay_tx > #replays then
                     settings.replay_tx = #replays
+                end
+                if dz then
+                    play.start_replay(replays[settings.replay_tx])
                 end
             else
                 if dz then
@@ -3801,4 +4071,4 @@ v.recall()
 print("[TEST] Starting menu...")
 main_menu.start()
 
-print("---------- Script initialized! ----------\n")
+print("�---------- Script initialized! ----------�\n") -- wow, a �
