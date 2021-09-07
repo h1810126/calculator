@@ -172,6 +172,21 @@ local function bounce(time, period)
     return abs(period - (time % (period * 2))) / period
 end
 
+local function safeloop(check_f, maxloops, do_f)
+    local loop = 0
+    local maxloops = maxloops
+    while not check_f() do
+        if do_f ~= nil then
+            do_f()
+        end
+        loop = loop + 1
+        if loop > maxloops then
+            return false -- failure!
+        end
+    end
+    return true -- success!
+end
+
 -- @table library
 
 -- deep copy table using recursion
@@ -2445,7 +2460,24 @@ function v.recall()
     end
 end
 
-local VERSION = "v4.7.3"
+local VERSION = "0.5.2" -- better version numbering (yes)
+local version_list = {
+    { key = "0.5.0",
+        "Started recording changes in a changelog. Some previous versions:",
+        "v0.1: game done",
+        "v0.2: main menu, different modes",
+        "v0.3: settings, controls",
+        "v0.4: 180/mirror rotation, funny blocks",
+    },
+    { key = "0.5.1",
+        "Added replays.",
+        "??????????",
+    },
+    { key = "0.5.2",
+        "The speed of replays can be changed.",
+        "Fixed the hard drop crash.",
+    }
+}
 
 -- @main menu
 
@@ -2478,7 +2510,7 @@ function main_menu.paint(gc)
     fill_rect(gc, main_menu.selector - 5 + select_dx, 140, 10, 10, block_colors[-1])
     
     set_font(gc, 8)
-    draw_string_plop(gc, VERSION, window_width / 2, 200, "white")
+    draw_string_plop(gc, "v" .. VERSION, window_width / 2, 200, "white")
 end
 
 function main_menu.timer()
@@ -2666,11 +2698,12 @@ function play.start(play_mode, args)
     -- init replay FIRST
     play.replaying = false
     play.replay = {
-        m = play_mode,
-        a = args,
-        p = {},
-        s = {},
-        t = 0,
+        m = play_mode, -- mode
+        a = args, -- mode_args
+        p = {}, -- pieces
+        s = {}, -- moves
+        t = 0, -- frame time
+        r = 0, -- real time
     }
     play.replay_moves = make_queue()
     
@@ -3068,12 +3101,16 @@ function play.paint(gc)
     end
     set_font(gc, 11)
     local time = 0
-    if play.mode == "timed" then
-        --time = play.target_time - play.time / 20
-        time = play.target_time - play.get_time()
+    if play.replaying then
+        time = play.replay.r * play.replay_time / play.replay.t / 1000
     else
-        --time = play.time / 20
-        time = play.get_time()
+        if play.mode == "timed" then
+            --time = play.target_time - play.time / 20
+            time = play.target_time - play.get_time()
+        else
+            --time = play.time / 20
+            time = play.get_time()
+        end
     end
     local time_seconds = (time) % 60
     local time_minutes = floor(time / 60)
@@ -3102,6 +3139,11 @@ function play.paint(gc)
     
     if play.replaying then
         -- draw replay somewhere
+        set_font(gc, 10)
+        set_color_mix(gc, "white", "red", play.replay_speed / 5 - 0.2)
+        draw_string(gc, "x" .. tostring(play.replay_speed), window_width + ox, 11 + oy, nil, "right")
+        draw_string(gc, "replay", window_width - 18 + ox, 11 + oy, "white", "right")
+        draw_string(gc, tostring(math.min(play.replay_time, play.replay.t)) .. "/" .. tostring(play.replay.t), window_width + ox, 31 + oy, "white", "right")
     end
     
     if play.paused then
@@ -3191,15 +3233,17 @@ function play.timer(meta)
             elseif move == "B" then
                 play.move(1, 0)
             elseif move == "C" then
-                while not play.move(-1, 0) do end
+                safeloop(function() return play.move(-1, 0) end, 20)
             elseif move == "D" then
-                while not play.move(1, 0) do end
+                safeloop(function() return play.move(1, 0) end, 20)
             elseif move == "E" then
                 play.move(0, -1, true)
             elseif move == "F" then
-                while not play.move(0, -1, true) do end
+                safeloop(function() return play.move(0, -1, true) end, 50)
             elseif move == "G" then
-                while not play.move(0, -1, true) do end
+                if safeloop(function() return play.move(0, -1, true) end, 50) then
+                    -- ?
+                end
                 if play.piece.done ~= 1000000 then
                     play.piece.done = 0
                     t.board.offset_y = 2
@@ -3229,9 +3273,8 @@ function play.timer(meta)
             play.timer(meta - 1)
         end
     else
-        
-        -- record move/time (if not replaying)
-        if type(play.replay.s) == "table" then
+        -- record key-value pair move/time (if not replaying or failing)
+        if type(play.replay.s) == "table" and not play.fail then
             play.replay.s[play.time] = play.replay_moves:pop_left()
             play.replay.t = play.time
         end
@@ -3260,12 +3303,6 @@ function play.add_piece()
         play.disp_lines_score = 0
     end
         
-    -- all clear!
-    if t.check_line_empty(1) then
-        play.disp_lines = "PC" .. count
-        play.disp_lines_score = lines_score[play.disp_lines]
-    end
-        
     -- t-spin!
     if play.t_spin > 0 then
         play.disp_lines = "T" .. count
@@ -3281,6 +3318,15 @@ function play.add_piece()
             play.disp_lines = "?" .. count
             play.disp_lines_score = lines_score[play.disp_lines]
         end
+    end
+                
+    -- all clear!
+    if t.check_line_empty(1) then
+        play.disp_lines = "PC" .. count
+        if play.disp_lines_score == nil then
+            play.disp_lines_score = 0
+        end
+        play.disp_lines_score = play.disp_lines_score + lines_score[play.disp_lines]
     end
     
     -- time, combo
@@ -3487,24 +3533,30 @@ function play.charIn(char)
                     move = "B"
                 end
             elseif char == play.settings.move_left_all or char == play.settings.move_left_all_2 then
-                while not play.move(-1, 0) do end
-                move = "C"
+                -- while not play.move(1, 0) do end
+                if safeloop(function() return play.move(-1, 0) end, 20) then
+                    move = "C"
+                end
             elseif char == play.settings.move_right_all or char == play.settings.move_right_all_2 then
-                while not play.move(1, 0) do end
-                move = "D"
+                if safeloop(function() return play.move(1, 0) end, 20) then
+                    move = "D"
+                end
             elseif char == play.settings.soft_drop or char == play.settings.soft_drop_2 then
-                play.move(0, -1, true)
-                move = "E"
+                if not play.move(0, -1, true) then
+                    move = "E"
+                end
             elseif char == play.settings.soft_drop_all or char == play.settings.soft_drop_all_2 then
-                while not play.move(0, -1, true) do end
-                move = "F"
+                if safeloop(function() return play.move(0, -1, true) end, 50) then
+                    move = "F"
+                end
             elseif char == play.settings.hard_drop or char == play.settings.hard_drop_2 then
-                while not play.move(0, -1, true) do end
+                if safeloop(function() return play.move(0, -1, true) end, 50) then
+                    move = "G"
+                end
                 if play.piece.done ~= 1000000 then
                     play.piece.done = 0
                     t.board.offset_y = 2
                 end
-                move = "G"
             elseif char == play.settings.rotate_left or char == play.settings.rotate_left_2 then
                 if not play.rotate(-1) then
                     move = "H"
@@ -3559,7 +3611,9 @@ function play_end.start(info)
     play_end.info = deep_copy(info)
     if play.replaying then
         -- don't save the replay!
+        play_end.replaying = true
     else
+        play.replay.r = info.time * 1000
         play_end.replay = play.replay_encode(play.replay)
         replays[1] = deep_copy(play_end.replay)
     end
@@ -3610,9 +3664,14 @@ function play_end.timer()
 end
 
 function play_end.charIn(char)
-     if char == "esc" or char == "enter" then
-        menu.start()
-     end
+    local dx, dy = dirnum_to_xy_extended(char_to_dirnum(char))
+    if char == "esc" or char == "enter" then
+        if play_end.replaying then
+            main_menu.start()
+        else
+            menu.start()
+        end
+    end
 end
 
 function settings.start()
@@ -3734,6 +3793,10 @@ settings.draw[1] = function(gc, ox, oy)
     if settings.sx < 2.1 then
         draw_rect(gc, 40 + ox + 2 * round(settings.sx * 40), round(settings.sy * 15) * 2 - 10 + oy, 60, 20)
     end
+    
+    local y = (#settings.controls + 1) * 30
+    set_font(gc, 10)
+    draw_string(gc, "About", window_width / 2 + ox, y + oy, "white", "centre")
 end
 
 settings.draw[2] = function(gc, ox, oy)
@@ -3776,7 +3839,7 @@ settings.draw[2] = function(gc, ox, oy)
         end
         set_font(gc, 11)
         draw_rect(gc, 110 + ox, 10 + oy, window_width - 220, 25, c)
-        c = block_colors[math.floor(settings.time / 10) % 7 + 1]
+        c = block_colors[floor(settings.time / 10) % 7 + 1]
         draw_string(gc, "Replay", window_width / 2 + ox, 22.5 + oy, c, "centre")
     
         local g = play.settings.gravity
@@ -3958,8 +4021,11 @@ function settings.charIn(char)
             settings.ty = 1
         elseif settings.tx >= 3 then
             settings.tx = 2
-        elseif settings.ty >= #settings.controls then
-            settings.ty = #settings.controls
+        elseif settings.ty >= #settings.controls + 1 then
+            settings.ty = #settings.controls + 1
+            settings.tx = 1.111 -- wow
+        else
+            settings.tx = floor(settings.tx)
         end
         if settings.ty * 30 - settings.target_tab_scroll > 150 then
             settings.target_tab_scroll = settings.target_tab_scroll + 30
