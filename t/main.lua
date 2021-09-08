@@ -175,13 +175,13 @@ end
 local function safeloop(check_f, maxloops, do_f)
     local loop = 0
     local maxloops = maxloops
-    while not check_f() do
+    while not check_f() do -- if check_f is true, then break
         if do_f ~= nil then
             do_f()
         end
         loop = loop + 1
         if loop > maxloops then
-            return false -- failure!
+            return false -- failure! (infinite loop)
         end
     end
     return true -- success!
@@ -297,6 +297,37 @@ local function serialize(o)
     return table.concat(code)
 end
 
+local function serialize_unsafe(o)
+    local code = {}
+    if type(o) == "number" then
+        table.insert(code, o)
+    elseif type(o) == "string" then
+        table.insert(code, string.format("%q", o))
+    elseif type(o) == "table" then
+        table.insert(code, "{")
+        for k,v in pairs(o) do
+            if type(k) == "string" then
+                table.insert(code, k)
+                table.insert(code, "=")
+            elseif type(k) == "number" then
+                table.insert(code, "[")
+                table.insert(code, k)
+                table.insert(code, "]=")
+            else
+                -- unsupported key...
+                print("Unsupported key type: ", k)
+            end
+            table.insert(code, serialize_unsafe(v))
+            table.insert(code, ",")
+        end
+        table.insert(code, "}")
+    else
+        error("cannot serialize_unsafe a " .. type(o))
+        return nil
+    end
+    return table.concat(code)
+end
+
 local function deserialize(o)
     local f = loadstring("return " .. o)
     return f()
@@ -382,7 +413,7 @@ local function make_deque()
     
     local pop_left = function(self)
         if self:is_empty() then return nil end
-        local r = self[self.head+1]
+        --local r = self[self.head+1]
         self.head = self.head + 1
         local r = self[self.head]
         self[self.head] = nil
@@ -466,6 +497,12 @@ local function make_deque()
         end
     end
     
+    local print_ = function(self)
+        for i = self.head + 1, self.tail do
+            print(self[i])
+        end
+    end
+    
     local methods = {
         push_right = push_right,
         push_left = push_left,
@@ -480,9 +517,11 @@ local function make_deque()
         iter_right = iter_right,
         iter_left = iter_left,
         length = length,
+        size = length,
         is_empty = is_empty,
         contents = contents,
         get = get,
+        print = print_,
     }
     
     local new = function()
@@ -2468,7 +2507,7 @@ function v.store()
     v.t.settings = deep_copy(play.settings)
     v.t.replays = deep_copy(replays)
     -- v.t.lbs = deep_copy(lbs)
-    local s = serialize(v.t)
+    local s = serialize_unsafe(v.t)
     var.store("tetris", s)
 end
 
@@ -2840,8 +2879,6 @@ end
 
 function play.replay_decode(r)
 
-    table.print(r)
-
     -- pieces
     local p = {}
     for i = 1, #r.p do
@@ -2990,6 +3027,7 @@ function play.init_fail()
         play.fail = true
         play.fail_time = play.time
         play.fail_time_milli = timer.getMilliSecCounter()
+        play.record_replay_move_all()
     end
 end
 
@@ -3203,7 +3241,9 @@ function play.timer(meta)
         play.update_gravity()
     end
     
-    play.disp_score = smooth(play.disp_score, play.score, 0.7)
+    if meta == nil then
+        play.disp_score = smooth(play.disp_score, play.score, 0.7)
+    end
     
     local p = play.piece
     local new_piece = false
@@ -3255,65 +3295,91 @@ function play.timer(meta)
     
     if play.replaying then
         -- do move (if replaying)
-        play.replay_time = play.replay_time + 1
-        local move = play.replay.s[play.replay_time]
-        if play.replay_time > play.replay.t then
-            play.init_fail()
-        end
-        if move ~= nil then
-            if move == "A" then
-                play.move(-1, 0)
-            elseif move == "B" then
-                play.move(1, 0)
-            elseif move == "C" then
-                safeloop(function() return play.move(-1, 0) end, 20)
-            elseif move == "D" then
-                safeloop(function() return play.move(1, 0) end, 20)
-            elseif move == "E" then
-                play.move(0, -1, true)
-            elseif move == "F" then
-                safeloop(function() return play.move(0, -1, true) end, 50)
-            elseif move == "G" then
-                if safeloop(function() return play.move(0, -1, true) end, 50) then
-                    -- ?
-                end
-                if play.piece.done ~= 1000000 then
-                    play.piece.done = 0
-                    t.board.offset_y = 2
-                end
-            elseif move == "H" then
-                play.rotate(-1)
-            elseif move == "I" then
-                play.rotate(1)
-            elseif move == "J" then
-                play.rotate(2)
-            elseif move == "K" then
-                if blocks.mirror then
-                    play.rotate(0, true)
-                else
-                    print("Mirror mode not on!")
-                end
-            elseif move == "L" then
-                play.save_piece()
-            else
-                print("Unrecognised move: " .. move)
-            end
-        end
-        if meta == nil and play.replay_speed > 1 then
-            -- natural timer
-            play.timer(play.replay_speed)
-        elseif meta ~= nil and meta > 1 then
-            play.timer(meta - 1)
-        end
+        play.do_replay_move(meta)
     else
         -- record key-value pair move/time (if not replaying or failing)
         if type(play.replay.s) == "table" and not play.fail then
-            play.replay.s[play.time] = play.replay_moves:pop_left()
-            play.replay.t = play.time
+            if play.replay_moves:length() > 1 then
+                play.replay_moves:print()
+            end
+            play.record_replay_move()
         end
     end
     
     window:invalidate()
+end
+
+function play.do_replay_move(meta)
+    play.replay_time = play.replay_time + 1
+    local move = play.replay.s[play.replay_time]
+    if play.replay_time > play.replay.t then
+        play.init_fail()
+    end
+    if move ~= nil then
+        if move == "A" then
+            play.move(-1, 0)
+        elseif move == "B" then
+            play.move(1, 0)
+        elseif move == "C" then
+            safeloop(function() return play.move(-1, 0) end, 20)
+        elseif move == "D" then
+            safeloop(function() return play.move(1, 0) end, 20)
+        elseif move == "E" then
+            play.move(0, -1, true)
+        elseif move == "F" then
+            safeloop(function() return play.move(0, -1, true) end, 50)
+        elseif move == "G" then
+            if safeloop(function() return play.move(0, -1, true) end, 50) then
+                -- ?
+            end
+            if play.piece.done ~= 1000000 then
+                play.piece.done = 0
+                t.board.offset_y = 2
+            end
+        elseif move == "H" then
+            play.rotate(-1)
+        elseif move == "I" then
+            play.rotate(1)
+        elseif move == "J" then
+            play.rotate(2)
+        elseif move == "K" then
+            if blocks.mirror then
+                play.rotate(0, true)
+            else
+                print("Mirror mode not on!")
+            end
+        elseif move == "L" then
+            play.save_piece()
+        else
+            print("Unrecognised move: " .. move)
+        end
+    end
+    if meta == nil and play.replay_speed > 1 then
+        -- from natural timer
+        play.timer(play.replay_speed)
+    elseif meta ~= nil and meta > 1 then
+        play.timer(meta - 1)
+    end
+end
+
+function play.record_replay_move()
+    if play.replay_moves:is_empty() then
+        return false
+    end
+    play.replay.s[play.time] = play.replay_moves:pop_left()
+    play.replay.t = play.time
+    return play.replay_moves:is_empty()
+end
+
+function play.record_replay_move_all()
+    if play.replay_moves:is_empty() then
+        return false
+    end
+    play.time = play.time + 1
+    while not play.record_replay_move() do
+        play.time = play.time + 1
+    end
+    return true
 end
 
 function play.add_piece()
@@ -3631,7 +3697,11 @@ function play.get_info()
     local i = {}
     i.info = true
     --i.time = play.fail_time / 20
-    i.time = (play.fail_time_milli - play.milliseconds) / 1000
+    if play.replaying then
+        i.time = play.replay.r / 1000
+    else
+        i.time = (play.fail_time_milli - play.milliseconds) / 1000
+    end
     i.lines = play.lines
     i.score = play.score
     i.mode = play.mode
@@ -3871,13 +3941,15 @@ settings.draw[2] = function(gc, ox, oy)
         end
         draw_polyline(gc, { 0 + ox, 50 + oy, window_width + ox, 50 + oy }, "darkgrey")
         local r = replays[settings.replay_tx]
-        local time = #r.s
-        local bytes = #r.s + #r.p
-        set_font(gc, 11)
-        draw_string(gc, "Mode: " .. r.m, window_width / 2, 70 + oy, "white", "centre")
-        draw_string(gc, "Frames: " .. tostring(time), window_width / 2, 100 + oy, "white", "centre")
-        set_font(gc, 10)
-        draw_string(gc, tostring(bytes) .. " bytes", window_width / 2, 160 + oy, "white", "centre")
+        if r ~= nil then
+            local time = #r.s
+            local bytes = #r.s + #r.p
+            set_font(gc, 11)
+            draw_string(gc, "Mode: " .. r.m, window_width / 2, 70 + oy, "white", "centre")
+            draw_string(gc, "Frames: " .. tostring(time), window_width / 2, 100 + oy, "white", "centre")
+            set_font(gc, 10)
+            draw_string(gc, tostring(bytes) .. " bytes", window_width / 2, 160 + oy, "white", "centre")
+        end
         
     -- end of replay_show
     else
