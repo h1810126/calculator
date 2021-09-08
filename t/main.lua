@@ -1308,44 +1308,71 @@ local function draw_string_dump(gc, string, color)
     
 end
 
-local function draw_textbox(gc, x, y, w, h, text, font, color)
+local function draw_textbox(gc, x, y, w, h, text, color, font, align, bullet)
 
     set_color(gc, color)
     set_font(gc, font)
     
     local max_width = w
+    local drawtext = nil
+    local bullet = bullet or " "
+    local old_y = y
     
-    for key, text in pairs(text) do
-        
-        if gc:getStringWidth(text) < max_width then
-            -- draw the string safely!
-            gc:drawString(text, x, y)
-            y = y + font * 2
-        else
-            -- draw the string... er... in O(N * large constant) time 
-            local text_left = {}
-            for i in text:gmatch("%S+") do
-                table.insert(text_left, i)
-            end
-            
-            local loops = 0
-            while gc:getStringWidth(table.concat(text_left, " ")) >= max_width and loops < 10000 do
-                local text_done = {}
-                for k, i in ipairs(text_left) do
-                    table.insert(text_done, i)
-                end
-                while gc:getStringWidth(table.concat(text_done, " ")) >= max_width and loops < 10000 do
-                    table.remove(text_done, #text_done)
-                    loops = loops + 1
-                end
-                text_left = {unpack(text_left, #text_done + 1, #text_left)}
-                gc:drawString(table.concat(text_done, " "), x, y)
-                y = y + font * 2
-            end
-            gc:drawString(table.concat(text_left, " "), x, y)
-            y = y + font * 2
+    if align == "centre" or align == "center" then
+        drawtext = function(s)
+            draw_string_plop_both(gc, s, x + w / 2, y, color)
+        end
+    elseif align == nil or align == "" or align == "left" then
+        drawtext = function(s)
+            draw_string_plop_left(gc, s, x, y, color)
+        end
+    elseif align == "right" then
+        drawtext = function(s)
+            draw_string_plop_right(gc, s, x + w, y, color)
+        end
+    else
+        drawtext = function(s)
+            print(s)
         end
     end
+    
+    for key, text in pairs(text) do
+        -- key must be a number
+        if type(key) == "number" then
+            if gc:getStringWidth(text) < max_width then
+                -- draw the string safely!
+                drawtext(text)
+                --draw_string(gc, text, x, y, nil, align)
+                y = y + font * 2
+            else
+                -- draw the string... er... in O(N * large constant) time 
+                local text_left = {}
+                for i in text:gmatch("%S+") do
+                    table.insert(text_left, i)
+                end
+                
+                local loops = 0
+                while gc:getStringWidth(table.concat(text_left, " ")) >= max_width and loops < 10000 do
+                    local text_done = {}
+                    for k, i in ipairs(text_left) do
+                        table.insert(text_done, i)
+                    end
+                    while gc:getStringWidth(table.concat(text_done, " ")) >= max_width and loops < 10000 do
+                        table.remove(text_done, #text_done)
+                        loops = loops + 1
+                    end
+                    text_left = {unpack(text_left, #text_done + 1, #text_left)}
+                    drawtext(table.concat(text_done, " "))
+                    y = y + font * 2
+                end
+                drawtext(table.concat(text_left, " "))
+                y = y + font * 2
+            end
+        end
+        
+    end
+    
+    return y - old_y - font * 2
     
 end
 
@@ -1441,30 +1468,6 @@ end
 
 -- @handles
 
-function on.paint(gc)
-    _context = deep_copy(default_context)
-    
-    modes[mode].paint(gc)
-end
-
-function on.timer()
-    modes[mode].timer()
-end
-
--- @char template
-
-function on.charIn(char)
-    
-    if char == "," then
-        timer.stop()
-        timer.start(0.05)
-    end
-    
-    modes[mode].charIn(char)
-    
-    window:invalidate()
-end
-
 function on.enterKey()
     on.charIn("enter")
 end
@@ -1511,20 +1514,42 @@ end
 
 -- @globals
 
-main_menu = {}
-menu = {}
-play = {}
-play_end = {}
-settings = {}
-lb = {}
-lbs = {}
-replays = {}
+local main_menu = {}
+local menu = {}
+local play = {}
+local play_end = {}
+local settings = {}
+local lb = {}
+local lbs = {}
+local replays = {}
 
-mode = "main_menu"
-modes = { main_menu = main_menu, menu = menu, play = play, play_end = play_end, settings = settings, lb = lb }
+local mode = "main_menu"
+local modes = { main_menu = main_menu, menu = menu, play = play, play_end = play_end, settings = settings, lb = lb }
 
--- @colors
 
+-- @handles #2
+
+function on.paint(gc)
+    _context = deep_copy(default_context)
+    
+    modes[mode].paint(gc)
+end
+
+function on.timer()
+    modes[mode].timer()
+end
+
+function on.charIn(char)
+    
+    if char == "," then
+        timer.stop()
+        timer.start(0.05)
+    end
+    
+    modes[mode].charIn(char)
+    
+    window:invalidate()
+end
 
 
 -- @tetris
@@ -2460,24 +2485,32 @@ function v.recall()
     end
 end
 
-local VERSION = "0.5.2" -- better version numbering (yes)
 local version_list = {
     { key = "0.5.0",
-        "Started recording changes in a changelog. Some previous versions:",
+        "Started recording changes in a changelog. Previously:",
         "v0.1: game done",
         "v0.2: main menu, different modes",
         "v0.3: settings, controls",
         "v0.4: 180/mirror rotation, funny blocks",
     },
     { key = "0.5.1",
-        "Added replays.",
-        "??????????",
+        "Added replays, they record what happens in a game.",
+        "Replays can be replayed under settings -> display [-] -> replay [enter].",
+        "The speed of replays can be changed.",
+        " ",
+        "Warning: replays may be unstable.",
+        "test",
+        "test",
+        "test",
+        "test",
     },
     { key = "0.5.2",
-        "The speed of replays can be changed.",
-        "Fixed the hard drop crash.",
+        "Added some replay-related interface at the top right.",
+        "Changed the settings screen to have 6 tabs and added 2 new tabs.",
+        "Fixed the 'spam hard drop' crash. (finally!)",
     }
 }
+local VERSION = version_list[#version_list].key
 
 -- @main menu
 
@@ -3687,6 +3720,7 @@ function settings.start()
     settings.sz = 0
     settings.tx = 1
     settings.ty = 1
+    settings.height = 0
     settings.login_show = false
     settings.create_show = false
     settings.replay_show = false
@@ -3703,6 +3737,8 @@ function settings.paint(gc)
     draw_screen(gc, "black")
     
     local tab_w = window_width / 3
+    local tab_show = (settings.tab - 0.9) % 3 + 0.9
+    local target_tab_show = settings.target_tab
     
     local tab_oy = 30 - settings.tab_scroll
     local tab_left = floor(settings.tab)
@@ -3717,20 +3753,27 @@ function settings.paint(gc)
     end
             
     fill_rect(gc, 0, 0, window_width, 25, "black")
-    fill_rect(gc, (settings.tab * tab_w) - tab_w, 0, tab_w, 25, "dimgrey")
+    fill_rect(gc, (tab_show * tab_w) - tab_w, 0, tab_w, 25, "dimgrey")
+    
     set_font(gc, 10)
-    if settings.target_tab > 1 then
-        draw_string(gc, "+", (settings.tab * tab_w) - tab_w + 5, 10, "white", "centre")
+    if target_tab_show > 1 then
+        draw_string(gc, "+", (tab_show * tab_w) - tab_w + 5, 10, "white", "centre")
     end
-    if settings.target_tab < 3 then
-        draw_string(gc, "-", (settings.tab * tab_w) - 5, 10, "white", "centre")
+    if target_tab_show < 6 then
+        draw_string(gc, "-", (tab_show * tab_w) - 5, 10, "white", "centre")
     end
     draw_polyline(gc, { 0, 25, window_width, 25 }, "white")
     
     set_font(gc, 11)
-    draw_string_plop_both(gc, "Controls", tab_w / 2, 10, "white")
-    draw_string_plop_both(gc, "Gameplay", 3 * tab_w / 2, 10, "white")
-    draw_string_plop_both(gc, "Account", 5 * tab_w / 2, 10, "white")
+    if settings.target_tab <= 3 then
+        draw_string_plop_both(gc, "Controls", tab_w / 2, 10, "white")
+        draw_string_plop_both(gc, "Display", 3 * tab_w / 2, 10, "white")
+        draw_string_plop_both(gc, "Account", 5 * tab_w / 2, 10, "white")
+    else
+        draw_string_plop_both(gc, "Version", tab_w / 2, 10, "white")
+        draw_string_plop_both(gc, "About", 3 * tab_w / 2, 10, "white")
+        draw_string_plop_both(gc, "??????????", 5 * tab_w / 2, 10, "white")
+    end
     
     if settings.login_show then
         settings.draw.login(gc, 0, 0)
@@ -3760,6 +3803,12 @@ settings.controls = {
     "pause=Pause",
     "restart=Restart",
     "quit=Quit",
+}
+
+settings.about_text = {
+    "Test",
+    "This is a very long sentence to test how this textbox behaves. Ok, it works.",
+    "Both \\n test and &nbsp; test fails. Some short words. a-long-word-that-goes-to-the-next-line."
 }
 
 settings.draw[1] = function(gc, ox, oy)
@@ -3890,6 +3939,37 @@ settings.draw[3] = function(gc, ox, oy)
     draw_string_plop_both(gc, "this feature is not coming soon", window_width / 2 + ox, window_height - (settings.time * 4) % (window_height - oy + 10), "white")
 end
 
+settings.draw[4] = function(gc, ox, oy)
+    local tx = round(settings.tx)
+    for i = 1, #version_list do
+        local v = version_list[i]
+        if abs(i - settings.sx) < 0.8 then
+            local height = draw_textbox(gc, 20 + window_width * (i - settings.sx) + ox, 45 - settings.sy + oy, window_width - 40, window_height * 100, v, "white", 10, "left")
+            if tx == i then
+                settings.height = height
+            end
+        end
+    end
+    fill_rect(gc, ox, oy - 5, window_width, 35, "black")
+    set_font(gc, 11)
+    if version_list[tx] ~= nil then
+        set_font(gc, 11)
+        draw_string(gc, "v" .. version_list[tx].key, window_width / 2 + ox, 15 + oy, "white", "centre")
+    end
+end
+        
+settings.draw[5] = function(gc, ox, oy)
+    set_font(gc, 11)
+    draw_string(gc, "About this game...", window_width / 2 + ox, 15 + oy, "white", "centre")
+    -- (gc, x, y, w, h, text, color, font_size, alignment)
+    draw_textbox(gc, 20 + ox, 50 + oy, window_width - 40, window_height, settings.about_text, "white", 10, "centre")
+end
+        
+settings.draw[6] = function(gc, ox, oy)
+    set_font(gc, 11)
+    draw_string(gc, "this feature is not not not coming soon", window_width / 2 + ox, window_height - (settings.time * 4) % (window_height - oy + 10), "white", "centre")
+end
+
 settings.draw.login = function(gc, ox, oy)
     set_font(gc, 11)
     fill_rect(gc, 20, 20, window_width - 40, window_height - 40, "dimgrey")
@@ -3953,6 +4033,9 @@ function settings.charIn(char)
         elseif settings.replay_show then
             settings.replay_show = false
             return
+        elseif settings.target_tab > 3 then
+            settings.target_tab = settings.target_tab - 3
+            return
         else
             main_menu.start()
         end
@@ -3979,11 +4062,11 @@ function settings.charIn(char)
     if dx ~= 0 then
         settings.tx = settings.tx + dx
     elseif dy ~= 0 then
-        settings.ty = settings.ty + dy
-    elseif dz then
-        if settings.target_tab == 1 then
-            settings.sz = 1 - settings.sz
+        if settings.target_tab ~= 4 then
+            settings.ty = settings.ty + dy
         end
+    elseif dz then
+        -- handle enter individually
     elseif dt ~= 0 then
         settings.target_tab = (settings.target_tab + dt - 1 + settings.number) % settings.number + 1
         settings.replay_show = false -- if not false, funny behaviour
@@ -3998,6 +4081,14 @@ function settings.charIn(char)
             settings.ty = 1
             settings.tx = play.settings.gravity
         elseif settings.target_tab == 3 then
+            settings.target_tab_scroll = 0
+            settings.tx = 1
+            settings.ty = 1
+        elseif settings.target_tab == 4 then
+            settings.target_tab_scroll = 0
+            settings.tx = #version_list
+            settings.ty = 1
+        elseif settings.target_tab == 5 then
             settings.target_tab_scroll = 0
             settings.tx = 1
             settings.ty = 1
@@ -4031,6 +4122,13 @@ function settings.charIn(char)
             settings.target_tab_scroll = settings.target_tab_scroll + 30
         elseif settings.ty * 30 - settings.target_tab_scroll < 30 then
             settings.target_tab_scroll = settings.target_tab_scroll - 30
+        end
+        if dz then
+            if settings.ty == #settings.controls + 1 then
+                settings.target_tab = settings.target_tab + 3
+            else
+                settings.sz = 1 - settings.sz
+            end
         end
     elseif settings.target_tab == 2 then
         if settings.ty == 0 then
@@ -4092,7 +4190,24 @@ function settings.charIn(char)
         if dz then
             settings.login_show = true
         end
+                
+    elseif settings.target_tab == 4 then
         
+        -- versions
+        if settings.tx <= 1 then
+            settings.tx = 1
+        elseif settings.tx >= #version_list then
+            settings.tx = #version_list
+        end
+        local end_y = settings.height - window_width + 50
+        if dy == 1 and settings.ty < end_y then
+            settings.ty = settings.ty + 30
+        elseif dy == -1 and settings.ty > 1 then
+            settings.ty = settings.ty - 30
+        end
+
+    elseif settings.target_tab == 5 then
+        -- about, do nothing
     end
 end
 
