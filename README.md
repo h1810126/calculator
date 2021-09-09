@@ -6,4 +6,6 @@ Some calculator programs for the TI-Nspire™ CX (CAS optional).
 
 [`TD`](/d/): TD, not updated anymore.
 
+[`⚡`](/⚡/): Simple test for calculator graphics speed.
+
 ----
