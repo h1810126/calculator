@@ -327,12 +327,7 @@ local function serialize_unsafe(o)
     end
     return table.concat(code)
 end
-
-local function deserialize(o)
-    local f = loadstring("return " .. o)
-    return f()
-end
-
+    
 local function serialize_numbers(o)
     local code = {}
     if type(o) == "number" then
@@ -351,6 +346,11 @@ local function serialize_numbers(o)
         return nil
     end
     return table.concat(code)
+end
+
+local function deserialize(o)
+    local f = loadstring("return " .. o)
+    return f()
 end
 
 -- iterate through table in sorted order (for towers)
@@ -2276,6 +2276,9 @@ Formula: (s-i)*s+(s+1-j)
 --]]
     
 function t.rotate_piece(piece_type, rot)
+    if blocks[piece_type] == nil then
+        print(piece_type)
+    end
     if blocks_rotated[piece_type][rot] == nil then
         local b = deep_copy(blocks[piece_type]) -- non-rotated block
         local s = round(sqrt(#b))    -- size
@@ -2546,7 +2549,7 @@ local version_list = {
     { key = "0.5.2",
         "Added some replay-related interface at the top right.",
         "Changed the settings screen to have 6 tabs and added 2 new tabs.",
-        "Fixed the 'spam hard drop' crash. (finally!)",
+        "Fixed the 'spam hard drop' crash and other bugs (finally!)",
     }
 }
 local VERSION = version_list[#version_list].key
@@ -2779,6 +2782,13 @@ function play.start(play_mode, args)
     }
     play.replay_moves = make_queue()
     
+    -- switch first!
+    if play_mode == "funny" then
+        play.switch_block_table(args)
+    else
+        play.switch_block_table("normal")
+    end
+    
     play.init_board()
     play.init()
     
@@ -2787,11 +2797,6 @@ function play.start(play_mode, args)
     play.target_lines = -1
     play.target_time = -1 -- seconds
     
-    if play_mode == "funny" then
-        play.switch_block_table(args)
-    else
-        play.switch_block_table("normal")
-    end
     if play_mode == "practice" then
         -- do nothing
     elseif play_mode == "clear" then
