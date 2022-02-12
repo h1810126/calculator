@@ -983,11 +983,23 @@ local function set_color_bright(gc, color_string, amount)
 end
 
 local function draw_image(gc, image_string, x, y, w, h)
-    if w == nil and h == nil then
-        gc:drawImage(images[image_string], x, y)
-    else
-        gc:drawImage(image.copy(explore_images[image_string], w, h), x, y)
+    local img = images[image_string]
+    if img == nil then
+        error("unknown image: '" .. image_string .. "'")
+        return
     end
+    if (w == nil or w <= 0 or w == img:width()) and (h == nil or h <= 0 or h == img:height()) then
+        -- do nothing
+    else
+        local s = image_string .. "   " .. w .. "   " .. h
+        if _context.store.image[s] == nil then
+            img = image.copy(img, w, h)
+            _context.store.image[s] = img
+        else
+            img = _context.store.image[s]
+        end
+    end
+    gc:drawImage(img, x, y)
 end
 
 local function draw_rect(gc, x, y, w, h, color)
@@ -2214,6 +2226,24 @@ function t.clear_line(h)
     return true
 end
 
+-- vertical stuff
+
+function t.check_line_vertical(x)
+    for y = 1, t.board.height do
+        if not (t.get(x, y) ~= 0) then
+            return false
+        end
+    end
+    return true
+end
+    
+function t.clear_line_vertical(x)
+    for y = 1, t.board.height_ex - 1 do
+        t.set(x, y, 0)
+    end
+    return true
+end
+
 --[[
 
 notation
@@ -2550,6 +2580,9 @@ local version_list = {
         "Added some replay-related interface at the top right.",
         "Changed the settings screen to have 6 tabs and added 2 new tabs.",
         "Fixed the 'spam hard drop' crash and other bugs (finally!)",
+    },
+    { key = "0.5.3",
+        "Added new mode: vertical.",
     }
 }
 local VERSION = version_list[#version_list].key
@@ -2623,7 +2656,7 @@ end
 -- @menu
 
 menu.options = {
-    "Practice", "Lines", "Timed", "Clear", "Level", "Send", "Penta", "Funny"
+    "Practice", "Lines", "Timed", "Clear", "Level", "Send", "Vertical", "Penta", "Funny",
 }
 
 function menu.start()
@@ -2699,8 +2732,10 @@ function menu.charIn(char)
         elseif s == 6 then
             play.start("send", 0)
         elseif s == 7 then
-            play.start("funny", "penta")
+            play.start("vertical", 0)
         elseif s == 8 then
+            play.start("funny", "penta")
+        elseif s == 9 then
             play.start("funny", "funny")
         end
     elseif char == "esc" then
@@ -2812,6 +2847,8 @@ function play.start(play_mode, args)
         play.level = 1
         play.gravity = 10
     elseif play_mode == "send" then
+        -- ?
+    elseif play_mode == "vertical" then
         -- ?
     elseif play_mode == "funny" then
         -- already changed
@@ -3393,10 +3430,19 @@ function play.add_piece()
     t.add_piece(p.type, p.rot, p.x, p.y)
     
     local count = 0
-    for y = t.board.height, 1, -1 do
-        if t.check_line(y) then
-            t.clear_line(y)
-            count = count + 1
+    if play.mode == "vertical" then
+        for x = 1, t.board.width do
+            if t.check_line_vertical(x) then
+                t.clear_line_vertical(x)
+                count = count + 1
+            end
+        end
+    else
+        for y = t.board.height, 1, -1 do
+            if t.check_line(y) then
+                t.clear_line(y)
+                count = count + 1
+            end
         end
     end
     
