@@ -1,11 +1,11 @@
 ## calculator
 
-Some calculator programs for the TI-Nspire™ CX (CAS optional).
+Some calculator programs for the TI-Nspire™ CX (CAS _should be_ optional).
 
 [`tetris`](/t/): Tetris...
 
-[`TD`](/d/): TD, not updated anymore.
+[`TD`](/d/): ⚠️ Not updated anymore
 
-[`⚡`](/⚡/): Simple test for calculator graphics speed.
+[`⚡`](/⚡/): Tests a calculator's draw speed.
 
 ----
